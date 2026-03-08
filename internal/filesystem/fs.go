@@ -14,6 +14,10 @@ var (
 )
 
 func New() *FileManager {
+	if fmInstance != nil {
+		return fmInstance
+	}
+
 	once.Do(func() {
 		fmInstance = &FileManager{}
 	})
