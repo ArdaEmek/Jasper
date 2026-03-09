@@ -17,10 +17,12 @@ var (
 
 func New(path string) (*FileManager, error) {
 	err := os.MkdirAll(path, 0750)
-	if err != nil && os.IsExist(err) {
-		log.Println("Storage not found, creating a new one.")
-	} else {
-		return nil, err
+	if err != nil {
+		if os.IsExist(err) {
+			log.Println("Storage not found, creating a new one.")
+		} else {
+			return nil, err
+		}
 	}
 
 	once.Do(func() {
