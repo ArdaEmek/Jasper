@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"s3/internal/filesystem"
 	"strconv"
 	"time"
 
@@ -16,12 +17,19 @@ type Server struct {
 	port int
 
 	db database.Service
+	fm *filesystem.FileManager
 }
 
 func NewServer() *http.Server {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
+	fm, err := filesystem.New(os.Getenv("STORAGE_DIR"))
+	if err != nil {
+		panic(err)
+	}
+
 	NewServer := &Server{
 		port: port,
+		fm:   fm,
 
 		db: database.New(),
 	}
