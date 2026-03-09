@@ -22,6 +22,21 @@ type Service interface {
 	// Close terminates the database connection.
 	// It returns an error if the connection cannot be closed.
 	Close() error
+
+	// FindFirst retrieves a single row from the database.
+	FindFirst(ctx context.Context, query string, args ...interface{}) *sql.Row
+
+	// FindAll retrieves multiple rows from the database.
+	FindAll(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+
+	// Create inserts a new record into the database.
+	Create(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+
+	// Update modifies an existing record in the database.
+	Update(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+
+	// Delete removes a record from the database.
+	Delete(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
 }
 
 type service struct {
@@ -103,6 +118,42 @@ func (s *service) Health() map[string]string {
 	}
 
 	return stats
+}
+
+// FindFirst retrieves a single row from the database based on a query.
+// Always use placeholders ($1, $2, etc.) for parameters to prevent SQL injection.
+// Example: FindFirst(ctx, "SELECT * FROM users WHERE id = $1", userID)
+func (s *service) FindFirst(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return s.db.QueryRowContext(ctx, query, args...)
+}
+
+// FindAll retrieves multiple rows from the database based on a query.
+// Always use placeholders ($1, $2, etc.) for parameters to prevent SQL injection.
+// Remember to defer rows.Close() after iterating.
+// Example: rows, err := FindAll(ctx, "SELECT * FROM users WHERE active = $1", true)
+func (s *service) FindAll(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return s.db.QueryContext(ctx, query, args...)
+}
+
+// Create inserts a new record into the database.
+// Always use placeholders ($1, $2, etc.) for parameters to prevent SQL injection.
+// Example: result, err := Create(ctx, "INSERT INTO users (name, email) VALUES ($1, $2)", name, email)
+func (s *service) Create(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return s.db.ExecContext(ctx, query, args...)
+}
+
+// Update modifies an existing record in the database.
+// Always use placeholders ($1, $2, etc.) for parameters to prevent SQL injection.
+// Example: result, err := Update(ctx, "UPDATE users SET name = $1 WHERE id = $2", newName, userID)
+func (s *service) Update(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return s.db.ExecContext(ctx, query, args...)
+}
+
+// Delete removes a record from the database.
+// Always use placeholders ($1, $2, etc.) for parameters to prevent SQL injection.
+// Example: result, err := Delete(ctx, "DELETE FROM users WHERE id = $1", userID)
+func (s *service) Delete(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return s.db.ExecContext(ctx, query, args...)
 }
 
 // Close closes the database connection.
