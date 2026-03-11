@@ -17,7 +17,7 @@ type Server struct {
 	port int
 
 	db database.Service
-	fm *filesystem.FileManager
+	fm filesystem.FileManager
 }
 
 func NewServer() *http.Server {
