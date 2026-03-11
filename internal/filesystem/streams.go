@@ -14,7 +14,7 @@ func (fr *FileReader) Close() error {
 	return fr.File.Close()
 }
 
-func (fm *FileManager) ReadFile(fileName string) (*FileReader, error) {
+func (fm *fileManager) ReadFile(fileName string) (*FileReader, error) {
 	file, err := fm.GetFile(fileName)
 	if err != nil {
 		return nil, err
@@ -37,7 +37,7 @@ func (fw *FileWriter) Close() error {
 	return fw.File.Close()
 }
 
-func (fm *FileManager) WriteFile(fileName string) (*FileWriter, error) {
+func (fm *fileManager) WriteFile(fileName string) (*FileWriter, error) {
 	path, err := fm.joinPath(fileName)
 	if err != nil {
 		return nil, err

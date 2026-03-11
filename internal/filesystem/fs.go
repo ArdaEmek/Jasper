@@ -6,16 +6,27 @@ import (
 	"sync"
 )
 
-type FileManager struct {
+type fileManager struct {
 	workingDir string
 }
 
+type FileManager interface {
+	GetWorkingDir() string
+	CreateFile(fileName string) (*os.File, error)
+	GetFile(fileName string) (*os.File, error)
+	IsExist(fileName string) (bool, error)
+	DeleteFile(fileName string) error
+	GetFileInfo(fileName string) (os.FileInfo, error)
+	ReadFile(fileName string) (*FileReader, error)
+	WriteFile(fileName string) (*FileWriter, error)
+}
+
 var (
-	fmInstance *FileManager = nil
+	fmInstance *fileManager = nil
 	once       sync.Once
 )
 
-func New(path string) (*FileManager, error) {
+func New(path string) (FileManager, error) {
 	err := os.MkdirAll(path, 0750)
 	if err != nil {
 		if os.IsExist(err) {
@@ -26,7 +37,7 @@ func New(path string) (*FileManager, error) {
 	}
 
 	once.Do(func() {
-		fmInstance = &FileManager{
+		fmInstance = &fileManager{
 			path,
 		}
 	})
@@ -35,15 +46,15 @@ func New(path string) (*FileManager, error) {
 	return fmInstance, nil
 }
 
-func GetInstance() *FileManager {
+func GetInstance() FileManager {
 	return fmInstance
 }
 
-func (fm *FileManager) GetWorkingDir() string {
+func (fm *fileManager) GetWorkingDir() string {
 	return fm.workingDir
 }
 
-func (fm *FileManager) CreateFile(fileName string) (*os.File, error) {
+func (fm *fileManager) CreateFile(fileName string) (*os.File, error) {
 	path, err := fm.joinPath(fileName)
 	if err != nil {
 		return nil, err
@@ -52,7 +63,7 @@ func (fm *FileManager) CreateFile(fileName string) (*os.File, error) {
 	return os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0644)
 }
 
-func (fm *FileManager) GetFile(fileName string) (*os.File, error) {
+func (fm *fileManager) GetFile(fileName string) (*os.File, error) {
 	path, err := fm.joinPath(fileName)
 	if err != nil {
 		return nil, err
@@ -61,7 +72,7 @@ func (fm *FileManager) GetFile(fileName string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDONLY, 0644)
 }
 
-func (fm *FileManager) IsExist(fileName string) (bool, error) {
+func (fm *fileManager) IsExist(fileName string) (bool, error) {
 	path, err := fm.joinPath(fileName)
 	if err != nil {
 		return false, err
@@ -76,7 +87,7 @@ func (fm *FileManager) IsExist(fileName string) (bool, error) {
 	}
 }
 
-func (fm *FileManager) DeleteFile(fileName string) error {
+func (fm *fileManager) DeleteFile(fileName string) error {
 	path, err := fm.joinPath(fileName)
 	if err != nil {
 		return err
@@ -85,7 +96,7 @@ func (fm *FileManager) DeleteFile(fileName string) error {
 	return os.Remove(path)
 }
 
-func (fm *FileManager) GetFileInfo(fileName string) (os.FileInfo, error) {
+func (fm *fileManager) GetFileInfo(fileName string) (os.FileInfo, error) {
 	path, err := fm.joinPath(fileName)
 	if err != nil {
 		return nil, err
