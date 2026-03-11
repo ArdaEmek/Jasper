@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (fm *FileManager) sanitizePath(path string) (string, error) {
+func (fm *fileManager) sanitizePath(path string) (string, error) {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -28,7 +28,7 @@ func (fm *FileManager) sanitizePath(path string) (string, error) {
 	return absPath, nil
 }
 
-func (fm *FileManager) joinPath(filename string) (string, error) {
+func (fm *fileManager) joinPath(filename string) (string, error) {
 	var path string
 	if filepath.IsAbs(filename) {
 		path = filename
