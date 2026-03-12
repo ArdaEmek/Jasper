@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"os/signal"
@@ -11,9 +10,11 @@ import (
 	"time"
 
 	"s3/internal/server"
+
+	"github.com/quic-go/quic-go/http3"
 )
 
-func gracefulShutdown(apiServer *http.Server, done chan bool) {
+func gracefulShutdown(httpServer *http.Server, http3Server *http3.Server, done chan bool) {
 	// Create context that listens for the interrupt signal from the OS.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -28,8 +29,13 @@ func gracefulShutdown(apiServer *http.Server, done chan bool) {
 	// the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := apiServer.Shutdown(ctx); err != nil {
-		log.Printf("Server forced to shutdown with error: %v", err)
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Printf("HTTP/1.1 server forced to shutdown with error: %v", err)
+	}
+
+	if err := http3Server.Shutdown(ctx); err != nil {
+		log.Printf("HTTP/3 server forced to shutdown with error: %v", err)
 	}
 
 	log.Println("Server exiting")
@@ -39,22 +45,26 @@ func gracefulShutdown(apiServer *http.Server, done chan bool) {
 }
 
 func main() {
+	httpServer, http3Server := server.NewServer()
 
-	server := server.NewServer()
-
-	// Create a done channel to signal when the shutdown is complete
 	done := make(chan bool, 1)
+	go gracefulShutdown(httpServer, http3Server, done)
 
-	// Run graceful shutdown in a separate goroutine
-	go gracefulShutdown(server, done)
+	// Start HTTP/3 server in a goroutine
+	go func() {
+		log.Printf("HTTP/3 Server is running on %s\n", http3Server.Addr)
+		err := http3Server.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("HTTP/3 Server error: %v\n", err)
+		}
+	}()
 
-	log.Printf("Server is listening on %s", server.Addr)
-	err := server.ListenAndServe()
+	// Start HTTP/1.1 server
+	log.Printf("Server is running on %s\n", httpServer.Addr)
+	err := httpServer.ListenAndServeTLS("", "")
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		panic(fmt.Sprintf("http server error: %s", err))
+		log.Printf("HTTP/1.1 Server error: %v\n", err)
 	}
 
-	// Wait for the graceful shutdown to completed
 	<-done
-	log.Println("Graceful shutdown complete.")
 }
