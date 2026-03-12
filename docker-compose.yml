@@ -9,39 +9,44 @@ services:
       - ${PORT}:${PORT}
     environment:
       APP_ENV: ${APP_ENV}
+      STORAGE_DIR: ${STORAGE_DIR}
       PORT: ${PORT}
-      BLUEPRINT_DB_HOST: ${BLUEPRINT_DB_HOST}
-      BLUEPRINT_DB_PORT: ${BLUEPRINT_DB_PORT}
-      BLUEPRINT_DB_DATABASE: ${BLUEPRINT_DB_DATABASE}
-      BLUEPRINT_DB_USERNAME: ${BLUEPRINT_DB_USERNAME}
-      BLUEPRINT_DB_PASSWORD: ${BLUEPRINT_DB_PASSWORD}
-      BLUEPRINT_DB_SCHEMA: ${BLUEPRINT_DB_SCHEMA}
+      JASPER_DB_HOST: ${JASPER_DB_HOST}
+      JASPER_DB_PORT: ${JASPER_DB_PORT}
+      JASPER_DB_DATABASE: ${JASPER_DB_DATABASE}
+      JASPER_DB_USERNAME: ${JASPER_DB_USERNAME}
+      JASPER_DB_PASSWORD: ${JASPER_DB_PASSWORD}
+      JASPER_DB_SCHEMA: ${JASPER_DB_SCHEMA}
+      CERTIFICATE_PUBLIC_KEY: ${CERTIFICATE_PUBLIC_KEY}
+      CERTIFICATE_PRIVATE_KEY: ${CERTIFICATE_PRIVATE_KEY}
+      REDIS_ADDR: ${REDIS_ADDR}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     depends_on:
       psql_bp:
         condition: service_healthy
     networks:
-      - blueprint
+      - jasper
   psql_bp:
     image: postgres:latest
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${BLUEPRINT_DB_DATABASE}
-      POSTGRES_USER: ${BLUEPRINT_DB_USERNAME}
-      POSTGRES_PASSWORD: ${BLUEPRINT_DB_PASSWORD}
+      POSTGRES_DB: ${JASPER_DB_DATABASE}
+      POSTGRES_USER: ${JASPER_DB_USERNAME}
+      POSTGRES_PASSWORD: ${JASPER_DB_PASSWORD}
     ports:
-      - "${BLUEPRINT_DB_PORT}:5432"
+      - "${JASPER_DB_PORT}:5432"
     volumes:
       - psql_volume_bp:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${BLUEPRINT_DB_USERNAME} -d ${BLUEPRINT_DB_DATABASE}'"]
+      test: ["CMD-SHELL", "sh -c 'pg_isready -U ${JASPER_DB_USERNAME} -d ${JASPER_DB_DATABASE}'"]
       interval: 5s
       timeout: 5s
       retries: 3
       start_period: 15s
     networks:
-      - blueprint
+      - jasper
 
 volumes:
   psql_volume_bp:
 networks:
-  blueprint:
+  jasper:

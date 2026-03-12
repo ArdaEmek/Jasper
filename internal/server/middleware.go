@@ -7,6 +7,11 @@ import (
 
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Advertise HTTP/3 support
+		if r.ProtoMajor < 3 {
+			s.http3Server.SetQUICHeaders(w.Header())
+		}
+
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*") // Replace "*" with specific origins if needed
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")

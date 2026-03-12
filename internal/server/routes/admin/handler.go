@@ -21,14 +21,14 @@ func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
 
 func (h *Handler) withAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Check auth token
+		// Check auth header
 		token := r.Header.Get("Authorization")
 		if token == "" {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
-		// Validate token (from your db)
+		// Validate token
 		if !h.db.ValidateToken(token) {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return

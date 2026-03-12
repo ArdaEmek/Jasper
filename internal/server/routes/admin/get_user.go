@@ -83,5 +83,5 @@ func (h *Handler) userPOST(w http.ResponseWriter, r *http.Request) {
 		"id":      strconv.Itoa(user.Id),
 	}
 
-	utils.SuccessResponse(w, res, 200)
+	utils.SuccessResponse(w, res, 201)
 }
