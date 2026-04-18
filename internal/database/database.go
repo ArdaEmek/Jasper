@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"sync"
 
@@ -17,15 +19,19 @@ type Service interface {
 	// It returns an error if the connection cannot be closed.
 	Close()
 
+	// Admin
 	CreateUser(ctx context.Context, params RegisterParams) (*User, error)
-
 	GetUser(ctx context.Context, id int) (*User, error)
-
 	GetUserByName(ctx context.Context, name string) (*User, error)
-
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 
-	ValidateToken(token string) bool
+	// Bucket
+	GetBucketByName(ctx context.Context, name string) (*Bucket, error)
+	CreateBucket(ctx context.Context, name string, ownerId int, region string) (*Bucket, error)
+
+	// Auth
+	ValidatePresignedUrl(ctx context.Context, query url.Values) (*User, *ApiKey, *AuthError)
+	ValidateHeaderAuth(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError)
 }
 
 type service struct {
@@ -33,12 +39,12 @@ type service struct {
 }
 
 var (
-	database   = os.Getenv("JASPER_DB_DATABASE")
-	password   = os.Getenv("JASPER_DB_PASSWORD")
-	username   = os.Getenv("JASPER_DB_USERNAME")
-	port       = os.Getenv("JASPER_DB_PORT")
-	host       = os.Getenv("JASPER_DB_HOST")
-	schema     = os.Getenv("JASPER_DB_SCHEMA")
+	database   = os.Getenv("DB_DATABASE")
+	password   = os.Getenv("DB_PASSWORD")
+	username   = os.Getenv("DB_USERNAME")
+	port       = os.Getenv("DB_PORT")
+	host       = os.Getenv("DB_HOST")
+	schema     = os.Getenv("DB_SCHEMA")
 	dbInstance *service
 	once       sync.Once
 )
