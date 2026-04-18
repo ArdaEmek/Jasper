@@ -73,3 +73,4 @@ func NewServer() (*http.Server, *http3.Server) {
 
 	return httpServer, http3Server
 }
+}

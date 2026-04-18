@@ -74,6 +74,7 @@ func (h *Handler) userPOST(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.db.CreateUser(r.Context(), tempuser)
 	if err != nil {
+		log.Printf("Error occurred while creating user: %v", err)
 		utils.ErrorResponse(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

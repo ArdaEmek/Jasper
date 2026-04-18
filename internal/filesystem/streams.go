@@ -6,11 +6,19 @@ import (
 )
 
 type FileReader struct {
-	File    *os.File
-	Scanner *bufio.Scanner
+	File   *os.File
+	closed bool
+}
+
+func (fr *FileReader) Read(p []byte) (n int, err error) {
+	return fr.File.Read(p)
 }
 
 func (fr *FileReader) Close() error {
+	if fr.closed {
+		return nil
+	}
+	fr.closed = true
 	return fr.File.Close()
 }
 
@@ -20,17 +28,27 @@ func (fm *fileManager) ReadFile(fileName string) (*FileReader, error) {
 		return nil, err
 	}
 
-	scanner := bufio.NewScanner(file)
-	return &FileReader{file, scanner}, nil
+	return &FileReader{File: file}, nil
 }
 
 type FileWriter struct {
 	File   *os.File
 	Writer *bufio.Writer
+	closed bool
+}
+
+func (fw *FileWriter) Write(p []byte) (n int, err error) {
+	return fw.Writer.Write(p)
 }
 
 func (fw *FileWriter) Close() error {
+	if fw.closed {
+		return nil
+	}
+	fw.closed = true
+
 	if err := fw.Writer.Flush(); err != nil {
+		fw.File.Close()
 		return err
 	}
 
@@ -49,5 +67,5 @@ func (fm *fileManager) WriteFile(fileName string) (*FileWriter, error) {
 	}
 
 	writer := bufio.NewWriter(file)
-	return &FileWriter{file, writer}, nil
+	return &FileWriter{File: file, Writer: writer}, nil
 }
