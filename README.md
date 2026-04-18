@@ -45,6 +45,11 @@ cp env.example .env
 openssl req -x509 -newkey rsa:2048 -nodes -keyout certs/key.pem -out certs/cert.pem -days 365 -subj "/CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1"
 ```
 
+> **Windows / Git Bash Users:** If you receive a format error for the subject name, Git Bash is likely trying to convert the path. Use `//CN=localhost` instead (with two slashes):
+> ```bash
+> openssl req -x509 -newkey rsa:2048 -nodes -keyout certs/key.pem -out certs/cert.pem -days 365 -subj "//CN=localhost" -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1"
+> ```
+
 > **Note:** For production, use a certificate from a trusted CA (e.g., Let's Encrypt). For local development, you can trust the self-signed cert by adding it to your OS certificate store.
 
 4. Start the database (optional — if using a local PostgreSQL instance)
@@ -149,4 +154,3 @@ make clean
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
-
