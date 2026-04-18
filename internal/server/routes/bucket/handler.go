@@ -18,7 +18,8 @@ func New() *Handler {
 }
 
 func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
-	// mux.HandleFunc("GET /{bucket}/{key...}", h.middleware())
+	mux.HandleFunc("PUT /{bucket}/{key...}", h.middleware(h.putObjectHandler))
+	mux.HandleFunc("PUT /{bucket}", h.putBucketHandler)
 }
 
 func (h *Handler) middleware(next http.HandlerFunc) http.HandlerFunc {
@@ -39,11 +40,30 @@ func (h *Handler) middleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		// Validate token
-		user, apiKey, err2 := h.db.ValidateHeaderAuth(r.Context(), r)
-		if err2 != nil {
+		var user *database.User
+		var apiKey *database.ApiKey
+		var authErr *database.AuthError
+
+		if len(authHeader) > 0 {
+			user, apiKey, authErr = h.db.ValidateHeaderAuth(r.Context(), r)
+		} else {
+			user, apiKey, authErr = h.db.ValidatePresignedUrl(r.Context(), r.URL.Query())
+		}
+
+		if authErr != nil {
 			utils.S3ErrorResponse(w, utils.S3Error{
-				Code:      err2.Code,
-				Message:   err2.Message,
+				Code:      authErr.Code,
+				Message:   authErr.Message,
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+
+		if user == nil || apiKey == nil {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "AccessDenied",
+				Message:   "Access Denied",
 				RequestId: reqID,
 				Resource:  r.URL.Path,
 			})
