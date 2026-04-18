@@ -21,12 +21,13 @@ services:
       CERTIFICATE_PRIVATE_KEY: ${CERTIFICATE_PRIVATE_KEY}
       REDIS_ADDR: ${REDIS_ADDR}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ADMIN_ENDPOINT_ENABLED: ${ADMIN_ENDPOINT_ENABLED}
+      ADMIN_ENDPOINT_KEY: ${ADMIN_ENDPOINT_KEY}
     volumes:
         - jasper_storage_data:${STORAGE_DIR}
+        - ./certs:/app/certs:ro
     depends_on:
       db:
-        condition: service_healthy
-      cache:
         condition: service_healthy
     networks:
       - jasper_network
