@@ -2,8 +2,6 @@ package database
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"time"
 
@@ -28,14 +26,6 @@ type ApiKey struct {
 	SecretKey       string    `json:"secret_key"`
 	PermissionLevel string    `json:"permission_level"`
 	CreatedAt       time.Time `json:"created_at"`
-}
-
-func generateKey(length int) string {
-	b := make([]byte, length)
-	if _, err := rand.Read(b); err != nil {
-		panic(err)
-	}
-	return hex.EncodeToString(b)
 }
 
 func (s *service) CreateUser(ctx context.Context, params RegisterParams) (*User, error) {
