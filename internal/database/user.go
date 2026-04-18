@@ -143,3 +143,65 @@ func (s *service) GetUserByApiKey(ctx context.Context, accessKey string) (*User,
 
 	return &user, &apiKey, nil
 }
+
+func (s *service) CreateApiKey(ctx context.Context, userId int, permissionLevel string) (*ApiKey, error) {
+	var apiKey ApiKey
+
+	query := `
+		INSERT INTO api_keys (user_id, access_key, secret_key, permission_level)
+		VALUES ($1, gen_random_uuid()::text, gen_random_uuid()::text, $2)
+		RETURNING id, user_id, access_key, secret_key, permission_level, created_at
+	`
+
+	err := s.db.QueryRow(ctx, query, userId, permissionLevel).Scan(
+		&apiKey.Id,
+		&apiKey.UserId,
+		&apiKey.AccessKey,
+		&apiKey.SecretKey,
+		&apiKey.PermissionLevel,
+		&apiKey.CreatedAt,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &apiKey, nil
+}
+
+func (s *service) GetApiKeysByUserId(ctx context.Context, userId int) ([]ApiKey, error) {
+	var keys []ApiKey
+
+	query := `
+		SELECT id, user_id, access_key, secret_key, permission_level, created_at
+		FROM api_keys
+		WHERE user_id = $1
+	`
+	rows, err := s.db.Query(ctx, query, userId)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var apiKey ApiKey
+		err := rows.Scan(
+			&apiKey.Id,
+			&apiKey.UserId,
+			&apiKey.AccessKey,
+			&apiKey.SecretKey,
+			&apiKey.PermissionLevel,
+			&apiKey.CreatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		keys = append(keys, apiKey)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return keys, nil
+}

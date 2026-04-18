@@ -27,6 +27,9 @@ func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /admin/user", h.withAuth(h.userGET))
 	mux.HandleFunc("POST /admin/user", h.withAuth(h.userPOST))
+
+	mux.HandleFunc("GET /admin/apikey", h.withAuth(h.apikeyGET))
+	mux.HandleFunc("POST /admin/apikey", h.withAuth(h.apikeyPOST))
 }
 
 func (h *Handler) withAuth(next http.HandlerFunc) http.HandlerFunc {

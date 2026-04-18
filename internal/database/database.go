@@ -47,6 +47,11 @@ type Service interface {
 	// ValidateHeaderAuth verifies S3-compatible authentication credentials provided in the HTTP request headers.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.
 	ValidateHeaderAuth(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError)
+
+	// CreateApiKey creates a new API key for the given user ID.
+	CreateApiKey(ctx context.Context, userId int, permissionLevel string) (*ApiKey, error)
+	// GetApiKeysByUserId gets all API keys for the given user ID.
+	GetApiKeysByUserId(ctx context.Context, userId int) ([]ApiKey, error)
 }
 
 type service struct {
