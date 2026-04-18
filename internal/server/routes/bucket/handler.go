@@ -18,8 +18,19 @@ func New() *Handler {
 }
 
 func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
-	mux.HandleFunc("PUT /{bucket}/{key...}", h.middleware(h.putObjectHandler))
+	mux.HandleFunc("PUT /{bucket}/{key...}", h.putRouter)
 	mux.HandleFunc("PUT /{bucket}", h.putBucketHandler)
+}
+
+// Helper function for route to call putBucketHandler when key is empty.
+func (h *Handler) putRouter(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("key")
+	if key == "" || key == "/" {
+		h.putBucketHandler(w, r)
+		return
+	}
+
+	h.middleware(h.putObjectHandler)(w, r)
 }
 
 func (h *Handler) middleware(next http.HandlerFunc) http.HandlerFunc {
