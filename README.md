@@ -85,24 +85,104 @@ Browsers discover HTTP/3 automatically:
 | `STORAGE_DIR`            | Local directory for object storage   | `./data`           |
 | `CERTIFICATE_PUBLIC_KEY` | Path to TLS certificate (PEM)        | `./certs/cert.pem` |
 | `CERTIFICATE_PRIVATE_KEY`| Path to TLS private key (PEM)        | `./certs/key.pem`  |
-| `JASPER_DB_HOST`         | PostgreSQL host                      | `localhost`        |
-| `JASPER_DB_PORT`         | PostgreSQL port                      | `5432`             |
-| `JASPER_DB_DATABASE`     | Database name                        | `jasper`           |
-| `JASPER_DB_USERNAME`     | Database user                        | —                  |
-| `JASPER_DB_PASSWORD`     | Database password                    | —                  |
-| `JASPER_DB_SCHEMA`       | Database schema                      | `public`           |
+| `DB_HOST`                | PostgreSQL host                      | `localhost`        |
+| `DB_PORT`                | PostgreSQL port                      | `5432`             |
+| `DB_DATABASE`            | Database name                        | `jasper`           |
+| `DB_USERNAME`            | Database user                        | —                  |
+| `DB_PASSWORD`            | Database password                    | —                  |
+| `DB_SCHEMA`              | Database schema                      | `public`           |
 | `REDIS_ADDR`             | Redis server address                 | —                  |
 | `REDIS_PASSWORD`         | Redis password                       | —                  |
+| `ADMIN_ENDPOINT_ENABLED` | Enable admin endpoints               | `false`            |
+| `ADMIN_ENDPOINT_KEY`     | Admin endpoint authentication token  | —                  |
 
 ## API Endpoints
 
-| Method | Endpoint         | Auth     | Description        |
-|--------|------------------|----------|--------------------|
-| `GET`  | `/`              | No       | Homepage / API info |
-| `GET`  | `/admin/user`    | Token    | Get user by ID     |
-| `POST` | `/admin/user`    | Token    | Create a user      |
+### Admin Endpoints
+Admin endpoints require the `ADMIN_ENDPOINT_KEY` in the `Authorization` header.
 
-Admin endpoints require an `Authorization` header with a valid token.
+| Method | Endpoint         | Description        |
+|--------|------------------|--------------------|
+| `GET`  | `/admin/user`    | Get user by ID (requires JSON body: `{"id": 1}`) |
+| `POST` | `/admin/user`    | Create a new user (requires JSON body: `{"username": "user", "email": "user@example.com"}`) |
+| `POST` | `/admin/apikey`  | Generate API key for user (requires JSON body: `{"user_id": 1, "permission_level": "read_write"}`) |
+| `GET`  | `/admin/apikey`  | Get all API keys for user (requires JSON body: `{"id": 1}`) |
+
+### S3-Compatible Endpoints
+S3 endpoints require AWS Signature V4 authentication via `Authorization` header or presigned URLs.
+
+| Method   | Endpoint              | Description        |
+|----------|----------------------|-------------------|
+| `PUT`    | `/{bucket}`          | Create a new bucket |
+| `GET`    | `/{bucket}/{key}`    | Retrieve object (supports HTTP Range requests) |
+| `HEAD`   | `/{bucket}/{key}`    | Get object metadata without downloading |
+| `PUT`    | `/{bucket}/{key}`    | Upload/overwrite an object |
+
+#### Range Requests
+GET requests support the standard HTTP `Range` header for partial downloads:
+```
+Range: bytes=0-1023     # First 1024 bytes
+Range: bytes=500-       # From byte 500 to end
+```
+
+The server responds with `206 Partial Content` and the appropriate `Content-Range` header.
+
+## Supported S3 Operations
+
+| Operation | Status | Notes |
+|-----------|--------|-------|
+| **Bucket Operations** | | |
+| CreateBucket | ✅ | Put bucket endpoint |
+| DeleteBucket | ❌ | Not yet implemented |
+| ListBuckets | ❌ | Not yet implemented |
+| GetBucketLocation | ❌ | Not yet implemented |
+| **Object Operations** | | |
+| PutObject | ✅ | Upload/overwrite objects with metadata |
+| GetObject | ✅ | Download objects with Range request support |
+| HeadObject | ✅ | Get object metadata without body |
+| DeleteObject | ❌ | Not yet implemented |
+| CopyObject | ❌ | Not yet implemented |
+| **Multipart Upload** | | |
+| CreateMultipartUpload | ❌ | Not yet implemented |
+| UploadPart | ❌ | Not yet implemented |
+| CompleteMultipartUpload | ❌ | Not yet implemented |
+| AbortMultipartUpload | ❌ | Not yet implemented |
+| **Object Listing** | | |
+| ListObjects | ❌ | Not yet implemented |
+| ListObjectsV2 | ❌ | Not yet implemented |
+| **ACL & Permissions** | | |
+| PutObjectAcl | ❌ | Not yet implemented |
+| GetObjectAcl | ❌ | Not yet implemented |
+| **Tagging** | | |
+| PutObjectTagging | ❌ | Not yet implemented |
+| GetObjectTagging | ❌ | Not yet implemented |
+
+## Usage Examples
+
+### Creating a Bucket
+```bash
+aws s3 mb s3://my-bucket --endpoint-url https://localhost:8080
+```
+
+### Uploading an Object
+```bash
+aws s3 cp myfile.txt s3://my-bucket/myfile.txt --endpoint-url https://localhost:8080
+```
+
+### Downloading an Object
+```bash
+aws s3 cp s3://my-bucket/myfile.txt ./myfile.txt --endpoint-url https://localhost:8080
+```
+
+### Getting Object Metadata (HEAD)
+```bash
+aws s3api head-object --bucket my-bucket --key myfile.txt --endpoint-url https://localhost:8080
+```
+
+### Range Request Example
+```bash
+curl -H "Range: bytes=0-99" https://localhost:8080/my-bucket/myfile.txt
+```
 
 ## Makefile
 
