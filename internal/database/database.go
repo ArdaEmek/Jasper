@@ -40,6 +40,8 @@ type Service interface {
 		contentType, etag, contentDisp, contentLang string,
 		customMeta map[string]string,
 	) (*Object, error)
+	GetObjectByKey(ctx context.Context, bucketId int, objectKey string) (*Object, error)
+	GetObject(ctx context.Context, objectId string) (*Object, error)
 
 	// ValidatePresignedUrl verifies an S3-compatible presigned URL's expiration and constraints.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.

@@ -18,7 +18,9 @@ func New() *Handler {
 }
 
 func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
+	mux.HandleFunc("GET /{bucket}/{key...}", h.middleware(h.getObjectHandler))
 	mux.HandleFunc("PUT /{bucket}/{key...}", h.putRouter)
+
 	mux.HandleFunc("PUT /{bucket}", h.putBucketHandler)
 }
 
