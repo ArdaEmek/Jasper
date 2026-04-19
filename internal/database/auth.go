@@ -93,7 +93,7 @@ func (s *service) ValidatePresignedUrl(ctx context.Context, r *http.Request) (*U
 func (s *service) verifySigV4Presigned(r *http.Request, providedSignature, secretKey, dateStr, signedHeaders string) bool {
 	query := r.URL.Query()
 	method := r.Method
-	canonicalURI := r.URL.Path
+	canonicalURI := r.URL.EscapedPath()
 
 	// Build canonical query, excluding X-Amz-Signature
 	var queryPairs []string
@@ -114,7 +114,8 @@ func (s *service) verifySigV4Presigned(r *http.Request, providedSignature, secre
 		payloadHash = emptyPayloadHash
 	}
 
-	canonicalHeaders := fmt.Sprintf("host:%s\n", r.Host)
+	// Build canonical headers from signed headers
+	canonicalHeaders := buildCanonicalHeaders(r, signedHeaders)
 	canonicalRequest := fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s",
 		method,
 		canonicalURI,
@@ -149,6 +150,30 @@ func (s *service) verifySigV4Presigned(r *http.Request, providedSignature, secre
 
 	computedSignature := hmacHexSHA256(kSigning, stringToSign)
 	return computedSignature == providedSignature
+}
+
+func buildCanonicalHeaders(r *http.Request, signedHeaders string) string {
+	headers := strings.Split(signedHeaders, ";")
+
+	var headerLines []string
+	for _, headerName := range headers {
+		headerName = strings.TrimSpace(headerName)
+		lowerHeaderName := strings.ToLower(headerName)
+
+		// IMPORTANT: Uses host variable provided by quic-go, it'll ignore Host header provided by reverse proxy.
+		var headerValue string
+		if lowerHeaderName == "host" {
+			headerValue = r.Host
+		} else {
+			headerValue = r.Header.Get(headerName)
+		}
+
+		headerLine := fmt.Sprintf("%s:%s", lowerHeaderName, strings.TrimSpace(headerValue))
+		headerLines = append(headerLines, headerLine)
+	}
+	slices.Sort(headerLines)
+
+	return strings.Join(headerLines, "\n") + "\n"
 }
 
 // Scopes: read, write, read_write
