@@ -12,11 +12,11 @@ build:
 # Run the application
 run:
 	@go run cmd/api/main.go
-# Create DB container
+# Create DB and cache container
 docker-run:
 	@docker compose up --build
 
-# Shutdown DB container
+# Shutdown DB and cache container
 docker-down:
 	@docker compose down
 

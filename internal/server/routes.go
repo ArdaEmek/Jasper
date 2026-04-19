@@ -2,16 +2,25 @@ package server
 
 import (
 	"net/http"
-	"s3/internal/server/handlers"
+	"s3/internal/server/routes"
+	"s3/internal/server/routes/admin"
+	"s3/internal/server/routes/bucket"
 )
 
 func (s *Server) RegisterRoutes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Creating route handler
-	h := handlers.New(s.db)
-	h.RegisterEndpoints(mux)
+	// Homepage routes
+	homeR := routes.New()
+	homeR.RegisterEndpoints(mux)
 
-	// Wrap the mux with CORS middleware
+	// Admin Routes
+	adminR := admin.New()
+	adminR.RegisterEndpoints(mux)
+
+	// Bucket Routes
+	bucketR := bucket.New()
+	bucketR.RegisterEndpoints(mux)
+
 	return s.corsMiddleware(mux)
 }
