@@ -2,6 +2,7 @@ package bucket
 
 import (
 	"crypto/md5"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -12,10 +13,13 @@ import (
 	"s3/internal/server/utils"
 	"strings"
 
+	"github.com/klauspost/crc32"
+
 	"github.com/segmentio/ksuid"
 )
 
 func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
 	reqID, _ := r.Context().Value("requestID").(string)
 	bucket, _ := r.Context().Value("bucket").(*database.Bucket)
 	apiKey, _ := r.Context().Value("apiKey").(*database.ApiKey)
@@ -103,7 +107,8 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	defer fw.Close()
 
 	hash := md5.New()
-	multiWriter := io.MultiWriter(fw.Writer, hash)
+	CRC32Hash := crc32.NewIEEE()
+	multiWriter := io.MultiWriter(fw.Writer, hash, CRC32Hash)
 
 	sizeBytes, err := io.Copy(multiWriter, r.Body)
 	if err != nil {
@@ -120,6 +125,19 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	fw.Close()
 	etag := hex.EncodeToString(hash.Sum(nil))
 
+	serverCRC32 := base64.StdEncoding.EncodeToString(CRC32Hash.Sum(nil))
+	clientCRC32 := query.Get("x-amz-checksum-crc32")
+	if clientCRC32 != "" && clientCRC32 != serverCRC32 {
+		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "InvalidDigest",
+			Message:   "The CRC32 checksum of the object does not match",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
 	_, err = h.db.CreateObject(r.Context(), bucket.Id, objectID, key, sizeBytes, contentType, etag, contentDisposition, contentLanguage, customMetadata)
 	if err != nil {
 		log.Printf("Database error creating object: %v\n", err)
@@ -133,5 +151,6 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("ETag", fmt.Sprintf("\"%s\"", etag))
+	w.Header().Set("X-Amz-Checksum-Crc32", serverCRC32)
 	w.WriteHeader(http.StatusOK)
 }
