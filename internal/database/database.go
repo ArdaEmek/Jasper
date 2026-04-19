@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"sync"
 
@@ -45,7 +44,7 @@ type Service interface {
 
 	// ValidatePresignedUrl verifies an S3-compatible presigned URL's expiration and constraints.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.
-	ValidatePresignedUrl(ctx context.Context, query url.Values) (*User, *ApiKey, *AuthError)
+	ValidatePresignedUrl(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError)
 	// ValidateHeaderAuth verifies S3-compatible authentication credentials provided in the HTTP request headers.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.
 	ValidateHeaderAuth(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError)

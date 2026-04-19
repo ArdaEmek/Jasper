@@ -60,10 +60,11 @@ func (h *Handler) middleware(next http.HandlerFunc) http.HandlerFunc {
 		if len(authHeader) > 0 {
 			user, apiKey, authErr = h.db.ValidateHeaderAuth(r.Context(), r)
 		} else {
-			user, apiKey, authErr = h.db.ValidatePresignedUrl(r.Context(), r.URL.Query())
+			user, apiKey, authErr = h.db.ValidatePresignedUrl(r.Context(), r)
 		}
 
 		if authErr != nil {
+			log.Println(authErr)
 			utils.S3ErrorResponse(w, utils.S3Error{
 				Code:      authErr.Code,
 				Message:   authErr.Message,

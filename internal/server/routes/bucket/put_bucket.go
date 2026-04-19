@@ -30,7 +30,7 @@ func (h *Handler) putBucketHandler(w http.ResponseWriter, r *http.Request) {
 	if len(authHeader) > 0 {
 		user, _, authErr = h.db.ValidateHeaderAuth(r.Context(), r)
 	} else {
-		user, _, authErr = h.db.ValidatePresignedUrl(r.Context(), r.URL.Query())
+		user, _, authErr = h.db.ValidatePresignedUrl(r.Context(), r)
 	}
 
 	if authErr != nil {

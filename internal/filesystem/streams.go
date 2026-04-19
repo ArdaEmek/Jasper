@@ -7,11 +7,12 @@ import (
 
 type FileReader struct {
 	File   *os.File
+	Reader *bufio.Reader
 	closed bool
 }
 
 func (fr *FileReader) Read(p []byte) (n int, err error) {
-	return fr.File.Read(p)
+	return fr.Reader.Read(p)
 }
 
 func (fr *FileReader) Close() error {
@@ -28,7 +29,10 @@ func (fm *fileManager) ReadFile(fileName string) (*FileReader, error) {
 		return nil, err
 	}
 
-	return &FileReader{File: file}, nil
+	return &FileReader{
+		File:   file,
+		Reader: bufio.NewReader(file),
+	}, nil
 }
 
 type FileWriter struct {
