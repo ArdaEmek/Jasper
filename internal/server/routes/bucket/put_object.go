@@ -93,6 +93,9 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if this is an overwrite so we can clean up the old file later
+	existingObj, _ := h.db.GetObjectByKey(r.Context(), bucket.Id, key)
+
 	objectID := ksuid.New().String()
 	fw, err := fs.WriteFile(objectID)
 	if err != nil {
@@ -112,6 +115,8 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	sizeBytes, err := io.Copy(multiWriter, r.Body)
 	if err != nil {
+		fw.Close()
+		_ = fs.DeleteFile(objectID)
 		log.Printf("Error writing file: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -128,6 +133,7 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	serverCRC32 := base64.StdEncoding.EncodeToString(CRC32Hash.Sum(nil))
 	clientCRC32 := query.Get("x-amz-checksum-crc32")
 	if clientCRC32 != "" && clientCRC32 != serverCRC32 {
+		_ = fs.DeleteFile(objectID)
 		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InvalidDigest",
@@ -140,6 +146,7 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.db.CreateObject(r.Context(), bucket.Id, objectID, key, sizeBytes, contentType, etag, contentDisposition, contentLanguage, customMetadata)
 	if err != nil {
+		_ = fs.DeleteFile(objectID)
 		log.Printf("Database error creating object: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -148,6 +155,14 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Resource:  r.URL.Path,
 		})
 		return
+	}
+
+	// Delete the old object with the same key
+	if existingObj != nil {
+		err := fs.DeleteFile(existingObj.ObjectId)
+		if err != nil {
+			log.Printf("Failed to delete overwritten file %s: %v\n", existingObj.ObjectId, err)
+		}
 	}
 
 	w.Header().Set("ETag", fmt.Sprintf("\"%s\"", etag))
