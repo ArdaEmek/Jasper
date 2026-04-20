@@ -72,6 +72,9 @@ var s3StatusMap = map[string]int{
 	// 500 - Server Errors
 	"InternalError":      http.StatusInternalServerError,
 	"ServiceUnavailable": http.StatusServiceUnavailable,
+
+	// 501 - Server Errors
+	"NotImplemented": http.StatusNotImplemented,
 }
 
 func S3Response(w http.ResponseWriter, data interface{}) {

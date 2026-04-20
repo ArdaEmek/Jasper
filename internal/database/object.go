@@ -149,3 +149,9 @@ func (s *service) GetObjectByKey(ctx context.Context, bucketId int, objectKey st
 
 	return &obj, nil
 }
+
+func (s *service) DeleteObject(ctx context.Context, bucketId int, objectKey string) error {
+	query := `DELETE FROM objects WHERE bucket_id = $1 AND object_key = $2`
+	_, err := s.db.Exec(ctx, query, bucketId, objectKey)
+	return err
+}
