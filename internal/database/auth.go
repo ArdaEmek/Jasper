@@ -73,7 +73,7 @@ func (s *service) ValidatePresignedUrl(ctx context.Context, r *http.Request) (*U
 		return nil, nil, &AuthError{"InvalidAccessKeyId", "The AWS Access Key Id you provided does not exist"}
 	}
 
-	ok := s.verifySigV4Presigned(r, signature, apiKey.SecretKey, dateStr, signedHeaders)
+	ok := s.verifySigV4(r, signature, apiKey.SecretKey, dateStr, signedHeaders, creds)
 	if !ok {
 		return nil, nil, &AuthError{"SignatureDoesNotMatch", "The request signature that the server calculated does not match the signature that you provided"}
 	}
@@ -89,16 +89,16 @@ func (s *service) ValidatePresignedUrl(ctx context.Context, r *http.Request) (*U
 	return user, apiKey, nil
 }
 
-// verifySigV4Presigned creates signature from headers and checks if it matches the signature given by the client
-func (s *service) verifySigV4Presigned(r *http.Request, providedSignature, secretKey, dateStr, signedHeaders string) bool {
+// verifySigV4 creates signature from parameters and checks if it matches the signature given by the client
+func (s *service) verifySigV4(r *http.Request, providedSignature, secretKey, dateStr, signedHeaders, credentialScope string) bool {
 	query := r.URL.Query()
 	method := r.Method
-	canonicalURI := r.URL.Path
+	canonicalURI := r.URL.EscapedPath()
 
 	// Build canonical query, excluding X-Amz-Signature
 	var queryPairs []string
 	for key, values := range query {
-		if key == "X-Amz-Signature" {
+		if strings.EqualFold(key, "X-Amz-Signature") {
 			continue
 		}
 		for _, value := range values {
@@ -109,12 +109,16 @@ func (s *service) verifySigV4Presigned(r *http.Request, providedSignature, secre
 	canonicalQueryString := strings.Join(queryPairs, "&")
 
 	// X-Amz-Content-Sha256 contains the actual payload hash or "UNSIGNED-PAYLOAD"
-	payloadHash := query.Get("X-Amz-Content-Sha256")
+	payloadHash := r.Header.Get("X-Amz-Content-Sha256")
+	if payloadHash == "" {
+		payloadHash = query.Get("X-Amz-Content-Sha256")
+	}
 	if payloadHash == "" {
 		payloadHash = emptyPayloadHash
 	}
 
-	canonicalHeaders := fmt.Sprintf("host:%s\n", r.Host)
+	// Build canonical headers from signed headers
+	canonicalHeaders := buildCanonicalHeaders(r, signedHeaders)
 	canonicalRequest := fmt.Sprintf("%s\n%s\n%s\n%s\n%s\n%s",
 		method,
 		canonicalURI,
@@ -126,12 +130,15 @@ func (s *service) verifySigV4Presigned(r *http.Request, providedSignature, secre
 	hashedCanonicalRequest := hashSHA256(canonicalRequest)
 
 	// Extract date and region
-	parts := strings.Split(query.Get("X-Amz-Credential"), "/")
+	parts := strings.Split(credentialScope, "/")
 	if len(parts) < 5 {
 		return false
 	}
 
 	// dateStr format: YYYYMMDDTHHmmss
+	if len(dateStr) < 8 {
+		return false
+	}
 	dateOnly := dateStr[:8] // Extract YYYYMMDD
 	region := parts[2]
 	stringToSign := fmt.Sprintf("AWS4-HMAC-SHA256\n%s\n%s/%s/s3/aws4_request\n%s",
@@ -149,6 +156,30 @@ func (s *service) verifySigV4Presigned(r *http.Request, providedSignature, secre
 
 	computedSignature := hmacHexSHA256(kSigning, stringToSign)
 	return computedSignature == providedSignature
+}
+
+func buildCanonicalHeaders(r *http.Request, signedHeaders string) string {
+	headers := strings.Split(signedHeaders, ";")
+
+	var headerLines []string
+	for _, headerName := range headers {
+		headerName = strings.TrimSpace(headerName)
+		lowerHeaderName := strings.ToLower(headerName)
+
+		// IMPORTANT: Uses host variable provided by quic-go, it'll ignore Host header provided by reverse proxy.
+		var headerValue string
+		if lowerHeaderName == "host" {
+			headerValue = r.Host
+		} else {
+			headerValue = r.Header.Get(headerName)
+		}
+
+		headerLine := fmt.Sprintf("%s:%s", lowerHeaderName, strings.TrimSpace(headerValue))
+		headerLines = append(headerLines, headerLine)
+	}
+	slices.Sort(headerLines)
+
+	return strings.Join(headerLines, "\n") + "\n"
 }
 
 // Scopes: read, write, read_write
@@ -181,10 +212,22 @@ func hmacHexSHA256(key, data string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+func extractAuthParam(authHeader, key string) string {
+	parts := strings.Split(authHeader, ",")
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if strings.HasPrefix(p, key+"=") {
+			return strings.TrimPrefix(p, key+"=")
+		}
+	}
+
+	return ""
+}
+
 func (s *service) ValidateHeaderAuth(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		return nil, nil, &AuthError{"AccessDenied", "Missing Authorization header"}
+		return nil, nil, &AuthError{"InvalidArgument", "Missing Authorization header"}
 	}
 
 	dateStr := r.Header.Get("X-Amz-Date")
@@ -192,12 +235,12 @@ func (s *service) ValidateHeaderAuth(ctx context.Context, r *http.Request) (*Use
 		dateStr = r.Header.Get("Date")
 	}
 	if dateStr == "" {
-		return nil, nil, &AuthError{"AccessDenied", "Missing date header"}
+		return nil, nil, &AuthError{"InvalidArgument", "Missing date header"}
 	}
 
 	requestTime, err := time.Parse("20060102T150405Z", dateStr)
 	if err != nil {
-		return nil, nil, &AuthError{"AccessDenied", "Invalid date format"}
+		return nil, nil, &AuthError{"InvalidArgument", "Invalid date format"}
 	}
 
 	now := time.Now().UTC()
@@ -213,7 +256,7 @@ func (s *service) ValidateHeaderAuth(ctx context.Context, r *http.Request) (*Use
 
 	parts := strings.Split(authHeader, "Credential=")
 	if len(parts) < 2 {
-		return nil, nil, &AuthError{"AccessDenied", "Malformed Authorization header"}
+		return nil, nil, &AuthError{"InvalidArgument", "Malformed Authorization header"}
 	}
 
 	credentialScope := strings.Split(parts[1], ",")[0]
@@ -222,6 +265,14 @@ func (s *service) ValidateHeaderAuth(ctx context.Context, r *http.Request) (*Use
 	user, apiKey, err := s.GetUserByApiKey(ctx, accessKey)
 	if err != nil || user == nil {
 		return nil, nil, &AuthError{"InvalidAccessKeyId", "The AWS Access Key Id you provided does not exist"}
+	}
+
+	signedHeaders := extractAuthParam(parts[1], "SignedHeaders")
+	signature := extractAuthParam(parts[1], "Signature")
+
+	ok := s.verifySigV4(r, signature, apiKey.SecretKey, dateStr, signedHeaders, credentialScope)
+	if !ok {
+		return nil, nil, &AuthError{"SignatureDoesNotMatch", "The request signature that the server calculated does not match the signature that you provided"}
 	}
 
 	return user, apiKey, nil

@@ -55,6 +55,8 @@ var s3StatusMap = map[string]int{
 
 	// 400 - Bad Request
 	"InvalidBucketName":       http.StatusBadRequest,
+	"InvalidArgument":         http.StatusBadRequest,
+	"InvalidDigest":           http.StatusBadRequest, // Checksum mismatch
 	"BucketAlreadyExists":     http.StatusBadRequest, // Global name conflict
 	"BucketAlreadyOwnedByYou": http.StatusBadRequest,
 	"EntityTooLarge":          http.StatusBadRequest, // File exceeds max size
@@ -83,7 +85,11 @@ func S3ErrorResponse(w http.ResponseWriter, e S3Error) {
 	if _, err := w.Write([]byte(xml.Header)); err != nil {
 		log.Printf("Failed to write XML header: %v", err)
 	}
-	if err := xml.NewEncoder(w).Encode(e); err != nil {
+
+	xmlData, err := xml.Marshal(e)
+	if err != nil {
 		log.Printf("Failed to encode S3 error: %v", err)
+	} else if _, err := w.Write(xmlData); err != nil {
+		log.Printf("Failed to write XML data: %v", err)
 	}
 }
