@@ -55,6 +55,7 @@ var s3StatusMap = map[string]int{
 
 	// 400 - Bad Request
 	"InvalidBucketName":       http.StatusBadRequest,
+	"InvalidArgument":         http.StatusBadRequest,
 	"InvalidDigest":           http.StatusBadRequest, // Checksum mismatch
 	"BucketAlreadyExists":     http.StatusBadRequest, // Global name conflict
 	"BucketAlreadyOwnedByYou": http.StatusBadRequest,

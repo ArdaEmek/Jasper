@@ -64,7 +64,6 @@ func (h *Handler) middleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if authErr != nil {
-			log.Println(authErr)
 			utils.S3ErrorResponse(w, utils.S3Error{
 				Code:      authErr.Code,
 				Message:   authErr.Message,
