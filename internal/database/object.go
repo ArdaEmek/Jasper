@@ -10,16 +10,16 @@ import (
 )
 
 type Object struct {
-	ObjectId           string            `json:"object_id"`
-	BucketId           int               `json:"bucket_id"`
-	ObjectKey          string            `json:"object_key"`
-	SizeBytes          int64             `json:"size_bytes"`
-	ContentType        string            `json:"content_type"`
-	ContentDisposition string            `json:"content_disposition"`
-	ContentLanguage    string            `json:"content_language"`
-	CustomMetadata     map[string]string `json:"custom_metadata"`
-	ETag               string            `json:"etag"`
-	CreatedAt          time.Time         `json:"created_at"`
+	ObjectId           string
+	BucketId           int
+	ObjectKey          string
+	SizeBytes          int64
+	ContentType        string
+	ContentDisposition string
+	ContentLanguage    string
+	CustomMetadata     map[string]string
+	ETag               string
+	CreatedAt          time.Time
 }
 
 func (s *service) CreateObject(
