@@ -22,17 +22,6 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	reqID, _ := r.Context().Value("requestID").(string)
 	bucket, _ := r.Context().Value("bucket").(*database.Bucket)
-	apiKey, _ := r.Context().Value("apiKey").(*database.ApiKey)
-
-	if apiKey.PermissionLevel == "read_only" {
-		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "AccessDenied",
-			Message:   "The provided API key has read-only permissions and cannot modify resources.",
-			RequestId: reqID,
-			Resource:  r.URL.Path,
-		})
-		return
-	}
 
 	key := r.PathValue("key")
 	if key == "" {

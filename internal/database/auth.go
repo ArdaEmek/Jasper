@@ -78,10 +78,15 @@ func (s *service) ValidatePresignedUrl(ctx context.Context, r *http.Request) (*U
 		return nil, nil, &AuthError{"SignatureDoesNotMatch", "The request signature that the server calculated does not match the signature that you provided"}
 	}
 
-	// Validate permission scope
+	// Validate if apikey has sufficient permissions
+	if !s.validatePermissions(apiKey.PermissionLevel, r.Method) {
+		return nil, nil, &AuthError{"AccessDenied", "Request method not allowed for this credential scope"}
+	}
+
+	// Validate if the presigned url has sufficient permissions
 	scope := query.Get("X-Amz-Scope")
 	if scope != "" {
-		if !s.validateScopePermission(scope, r.Method) {
+		if !s.validatePermissions(scope, r.Method) {
 			return nil, nil, &AuthError{"AccessDenied", "Request method not allowed for this credential scope"}
 		}
 	}
@@ -183,13 +188,13 @@ func buildCanonicalHeaders(r *http.Request, signedHeaders string) string {
 }
 
 // Scopes: read, write, read_write
-func (s *service) validateScopePermission(scope, method string) bool {
+func (s *service) validatePermissions(scope, method string) bool {
 	switch scope {
 	case "read":
 		return method == http.MethodGet || method == http.MethodHead
 	case "write":
 		return method == http.MethodPut || method == http.MethodPost || method == http.MethodDelete
-	case "read_write":
+	case "read_write", "full_access":
 		return true
 	default:
 		return false
@@ -273,6 +278,11 @@ func (s *service) ValidateHeaderAuth(ctx context.Context, r *http.Request) (*Use
 	ok := s.verifySigV4(r, signature, apiKey.SecretKey, dateStr, signedHeaders, credentialScope)
 	if !ok {
 		return nil, nil, &AuthError{"SignatureDoesNotMatch", "The request signature that the server calculated does not match the signature that you provided"}
+	}
+
+	// Validate if apikey has sufficient permissions
+	if !s.validatePermissions(apiKey.PermissionLevel, r.Method) {
+		return nil, nil, &AuthError{"AccessDenied", "Request method not allowed for this credential scope"}
 	}
 
 	return user, apiKey, nil
