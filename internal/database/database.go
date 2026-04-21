@@ -43,6 +43,8 @@ type Service interface {
 	GetObject(ctx context.Context, objectId string) (*Object, error)
 
 	CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string) error
+	GetMultipartUpload(ctx context.Context, uploadID string) (*MultipartUpload, error)
+	SaveMultipartUploadPart(ctx context.Context, uploadID string, partNumber int, etag string, size int64) error
 	// ValidatePresignedUrl verifies an S3-compatible presigned URL's expiration and constraints.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.
 	ValidatePresignedUrl(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError)
