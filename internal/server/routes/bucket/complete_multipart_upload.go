@@ -106,7 +106,7 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 		}
 
 		// Size check, parts must be > 5MB except for the last part
-		isLastPart := (i == len(completeReq.Parts)-1)
+		isLastPart := i == len(completeReq.Parts)-1
 		if !isLastPart && dbPart.Size < 5*1024*1024 {
 			utils.S3ErrorResponse(w, utils.S3Error{
 				Code:      "EntityTooSmall",
@@ -156,8 +156,8 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 		// Read part and write it to object
 		partFile, err := fs.ReadFile(partFileName)
 		if err != nil {
-			finalFile.Close()
-			fs.DeleteFile(newObjectID)
+			_ = finalFile.Close()
+			_ = fs.DeleteFile(newObjectID)
 			log.Printf("Error reading part file %s: %v", partFileName, err)
 			utils.S3ErrorResponse(w, utils.S3Error{
 				Code:      "InternalError",
@@ -169,10 +169,10 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 		}
 
 		_, err = io.Copy(finalFile.File, partFile.File) // Passing *os.File directly to use syscall copy_file_range, bypassing buffering completely
-		partFile.Close()
+		_ = partFile.Close()
 		if err != nil {
-			finalFile.Close()
-			fs.DeleteFile(newObjectID)
+			_ = finalFile.Close()
+			_ = fs.DeleteFile(newObjectID)
 			utils.S3ErrorResponse(w, utils.S3Error{
 				Code:      "InternalError",
 				Message:   "An internal error occurred. Try again.",
@@ -182,7 +182,7 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 			return
 		}
 	}
-	finalFile.Close()
+	_ = finalFile.Close()
 
 	finalEtag := fmt.Sprintf("%s-%d", hex.EncodeToString(hash.Sum(nil)), len(completeReq.Parts))
 
