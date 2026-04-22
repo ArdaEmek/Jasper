@@ -168,7 +168,7 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 			return
 		}
 
-		_, err = io.Copy(finalFile.Writer, partFile)
+		_, err = io.Copy(finalFile.File, partFile.File) // Passing *os.File directly to use syscall copy_file_range, bypassing buffering completely
 		partFile.Close()
 		if err != nil {
 			finalFile.Close()
