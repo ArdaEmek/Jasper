@@ -24,16 +24,6 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	bucket, _ := r.Context().Value("bucket").(*database.Bucket)
 
 	key := r.PathValue("key")
-	if key == "" {
-		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "AccessDenied",
-			Message:   "Access Denied",
-			RequestId: reqID,
-			Resource:  r.URL.Path,
-		})
-		return
-	}
-
 	contentLanguage := r.Header.Get("Content-Language")
 	contentDisposition := r.Header.Get("Content-Disposition")
 	contentType := r.Header.Get("Content-Type")
