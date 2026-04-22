@@ -18,14 +18,14 @@ func New() *Handler {
 }
 
 func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
-	mux.HandleFunc("GET /{bucket}/{key...}", h.middleware(h.getObjectHandler))
+	mux.HandleFunc("GET /{bucket}/{key...}", h.getRouter)
 	mux.HandleFunc("PUT /{bucket}/{key...}", h.putRouter)
-	mux.HandleFunc("POST /{bucket}/{key...}", h.multipartRouter)
+	mux.HandleFunc("POST /{bucket}/{key...}", h.postRouter)
 
 	mux.HandleFunc("PUT /{bucket}", h.putBucketHandler)
 }
 
-func (h *Handler) multipartRouter(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) postRouter(w http.ResponseWriter, r *http.Request) {
 	// /bucket/key?uploads
 	if r.URL.Query().Has("uploads") {
 		h.middleware(h.createMultipartUploadHandler)(w, r)
@@ -39,14 +39,25 @@ func (h *Handler) multipartRouter(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Helper function for route to call putBucketHandler when key is empty.
+func (h *Handler) getRouter(w http.ResponseWriter, r *http.Request) {
+	// Checks if request is ListParts
+	if r.URL.Query().Has("uploadId") {
+		h.middleware(h.listPartsHandler)(w, r)
+		return
+	}
+
+	h.middleware(h.getObjectHandler)(w, r)
+}
+
 func (h *Handler) putRouter(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
+	// Checks if request is PutBucket
 	if key == "" || key == "/" {
 		h.putBucketHandler(w, r)
 		return
 	}
 
+	// Checks if request is UploadPart
 	if r.URL.Query().Has("partNumber") && r.URL.Query().Has("uploadId") {
 		h.middleware(h.uploadPartHandler)(w, r)
 		return

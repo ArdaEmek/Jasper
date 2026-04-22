@@ -18,6 +18,13 @@ type MultipartUpload struct {
 	CreatedAt          time.Time
 }
 
+type MultipartUploadPart struct {
+	PartNumber int
+	ETag       string
+	Size       int64
+	CreatedAt  time.Time
+}
+
 func (s *service) CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string) error {
 	inputMetaJSON, err := json.Marshal(customMeta)
 	if err != nil {
@@ -74,4 +81,33 @@ func (s *service) SaveMultipartUploadPart(ctx context.Context, uploadID string, 
 	`
 	_, err := s.db.Exec(ctx, query, uploadID, partNumber, etag, size)
 	return err
+}
+
+func (s *service) ListMultipartUploadParts(ctx context.Context, uploadID string, partNumberMarker int, maxParts int) ([]MultipartUploadPart, error) {
+	query := `
+		SELECT part_number, etag, size, created_at
+		FROM multipart_upload_parts
+		WHERE upload_id = $1 AND part_number > $2
+		ORDER BY part_number ASC
+		LIMIT $3
+	`
+	rows, err := s.db.Query(ctx, query, uploadID, partNumberMarker, maxParts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var parts []MultipartUploadPart
+	for rows.Next() {
+		var part MultipartUploadPart
+		if err := rows.Scan(&part.PartNumber, &part.ETag, &part.Size, &part.CreatedAt); err != nil {
+			return nil, err
+		}
+		parts = append(parts, part)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return parts, nil
 }
