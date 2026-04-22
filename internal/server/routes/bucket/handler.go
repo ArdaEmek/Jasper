@@ -26,9 +26,13 @@ func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
 }
 
 func (h *Handler) postRouter(w http.ResponseWriter, r *http.Request) {
-	// /bucket/key?uploads
 	if r.URL.Query().Has("uploads") {
 		h.middleware(h.createMultipartUploadHandler)(w, r)
+		return
+	}
+
+	if r.URL.Query().Has("uploadId") {
+		h.middleware(h.completeMultipartUploadHandler)(w, r)
 		return
 	}
 

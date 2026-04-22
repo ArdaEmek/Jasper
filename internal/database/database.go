@@ -46,6 +46,8 @@ type Service interface {
 	GetMultipartUpload(ctx context.Context, uploadID string) (*MultipartUpload, error)
 	SaveMultipartUploadPart(ctx context.Context, uploadID string, partNumber int, etag string, size int64) error
 	ListMultipartUploadParts(ctx context.Context, uploadID string, partNumberMarker int, maxParts int) ([]MultipartUploadPart, error)
+	DeleteMultipartUpload(ctx context.Context, uploadID string) error
+
 	// ValidatePresignedUrl verifies an S3-compatible presigned URL's expiration and constraints.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.
 	ValidatePresignedUrl(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError)

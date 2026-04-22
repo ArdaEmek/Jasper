@@ -111,3 +111,12 @@ func (s *service) ListMultipartUploadParts(ctx context.Context, uploadID string,
 
 	return parts, nil
 }
+
+func (s *service) DeleteMultipartUpload(ctx context.Context, uploadID string) error {
+	query := `
+		DELETE FROM multipart_uploads
+		WHERE upload_id = $1
+	`
+	_, err := s.db.Exec(ctx, query, uploadID)
+	return err
+}
