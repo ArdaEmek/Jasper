@@ -41,7 +41,7 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "NoSuchUpload",
-			Message:   "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",
+			Message:   "The specified multipart upload does not exist. The upload ID might not be valid, or the multipart upload might have been aborted or completed.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -74,7 +74,7 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "Failed to prepare file upload",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -93,7 +93,7 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error writing file: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "Failed to write object",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -110,7 +110,7 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InvalidDigest",
-			Message:   "The CRC32 checksum of the object does not match",
+			Message:   "The Content-MD5 or checksum value that you specified is not valid.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -123,7 +123,7 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Database error saving part metadata: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "Failed to save part metadata",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})

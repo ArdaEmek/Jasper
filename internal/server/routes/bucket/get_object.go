@@ -106,7 +106,7 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Filesystem error retrieving object file %s: %v", objectData.ObjectId, err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "Failed to read object data.",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -128,7 +128,7 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", objectData.SizeBytes))
 				utils.S3ErrorResponse(w, utils.S3Error{
 					Code:      "InvalidRange",
-					Message:   "The requested range is not satisfiable",
+					Message:   "The requested range cannot be satisfied.",
 					RequestId: reqID,
 					Resource:  r.URL.Path,
 				})

@@ -80,7 +80,7 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "Failed to create object",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -99,7 +99,7 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error writing file: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "Failed to write object",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -116,7 +116,7 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InvalidDigest",
-			Message:   "The CRC32 checksum of the object does not match",
+			Message:   "The Content-MD5 or checksum value that you specified is not valid.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -129,7 +129,7 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Database error creating object: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "Failed to save object metadata",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})

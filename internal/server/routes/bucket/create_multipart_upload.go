@@ -79,7 +79,7 @@ func (h *Handler) createMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		log.Printf("Failed to create multipart upload DB entry: %v", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "We encountered an internal error. Please try again.",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})

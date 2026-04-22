@@ -34,7 +34,7 @@ func (h *Handler) listPartsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "NoSuchUpload",
-			Message:   "The specified upload does not exist. The upload ID may be invalid, or the upload may have been aborted or completed.",
+			Message:   "The specified multipart upload does not exist. The upload ID might not be valid, or the multipart upload might have been aborted or completed.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -56,7 +56,7 @@ func (h *Handler) listPartsHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
-			Message:   "Failed to retrieve parts",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})

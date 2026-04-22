@@ -61,6 +61,7 @@ var s3StatusMap = map[string]int{
 	"BucketAlreadyOwnedByYou": http.StatusBadRequest,
 	"EntityTooLarge":          http.StatusBadRequest, // File exceeds max size
 	"EntityTooSmall":          http.StatusBadRequest,
+	"MalformedXML":            http.StatusBadRequest,
 	"InvalidURI":              http.StatusBadRequest,
 	"MetadataTooLarge":        http.StatusBadRequest,
 	"KeyTooLongError":         http.StatusBadRequest,
