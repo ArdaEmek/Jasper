@@ -29,7 +29,7 @@ A lightweight, S3-compatible cloud storage server written in Go. Self-host your 
 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/jasper.git
+git clone https://github.com/ArdaEmek/jasper.git
 cd jasper
 ```
 
