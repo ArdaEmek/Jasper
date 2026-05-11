@@ -1,4 +1,4 @@
-# Project Jasper
+# Jasper
 
 A lightweight, S3-compatible cloud storage server written in Go. Self-host your own object storage with a familiar S3 API — store, retrieve, and manage objects without relying on AWS.
 
