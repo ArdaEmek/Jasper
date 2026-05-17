@@ -8,11 +8,12 @@ services:
     ports:
       - ${PORT}:${PORT}
     environment:
-      APP_ENV: ${APP_ENV}
-      STORAGE_DIR: ${STORAGE_DIR}
+      APP_ENV: ${APP_ENV:-local}
+      STORAGE_DIR: "/app/data"
       PORT: ${PORT}
-      DB_HOST: ${DB_HOST}
+      DB_HOST: "db"
       DB_PORT: ${DB_PORT}
+      DATABASE_URL: "postgres://${DB_USERNAME}:${DB_PASSWORD}@db:${DB_PORT}/${DB_DATABASE}?search_path=${DB_SCHEMA}&sslmode=disable"
       DB_DATABASE: ${DB_DATABASE}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -24,7 +25,7 @@ services:
       ADMIN_ENDPOINT_ENABLED: ${ADMIN_ENDPOINT_ENABLED}
       ADMIN_ENDPOINT_KEY: ${ADMIN_ENDPOINT_KEY}
     volumes:
-        - jasper_storage_data:${STORAGE_DIR}
+        - jasper_storage_data:/app/data
         - ./certs:/app/certs:ro
     depends_on:
       db:

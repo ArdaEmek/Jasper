@@ -87,7 +87,7 @@ func (h *Handler) putBucketHandler(w http.ResponseWriter, r *http.Request) {
 		} else {
 			utils.S3ErrorResponse(w, utils.S3Error{
 				Code:      "BucketAlreadyExists",
-				Message:   "The requested bucket name is not available. The bucket namespace is shared by all users of the system.",
+				Message:   "The requested bucket name is not available. The bucket namespace is shared by all users of the system. Specify a different name and try again.",
 				RequestId: reqID,
 				Resource:  r.URL.Path,
 			})

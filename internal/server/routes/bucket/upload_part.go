@@ -11,50 +11,47 @@ import (
 	"s3/internal/database"
 	"s3/internal/filesystem"
 	"s3/internal/server/utils"
-	"strings"
+	"strconv"
 
 	"github.com/klauspost/crc32"
-
-	"github.com/segmentio/ksuid"
 )
 
-func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
+func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 	reqID, _ := r.Context().Value("requestID").(string)
 	bucket, _ := r.Context().Value("bucket").(*database.Bucket)
+	user, _ := r.Context().Value("user").(*database.User)
 
 	key := r.PathValue("key")
-	contentLanguage := r.Header.Get("Content-Language")
-	contentDisposition := r.Header.Get("Content-Disposition")
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
+	query := r.URL.Query()
+	uploadID := query.Get("uploadId")
+	partNumberStr := query.Get("partNumber")
 
-	metadataSize := len(contentType) + len(contentLanguage) + len(contentDisposition)
-	if metadataSize > 2048 {
+	partNumber, err := strconv.Atoi(partNumberStr)
+	if err != nil || partNumber < 1 || partNumber > 10000 {
 		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "MetadataTooLarge",
-			Message:   "Your system metadata exceeds the maximum allowed size (2 KB)",
+			Code:      "InvalidArgument",
+			Message:   "Part number must be an integer between 1 and 10000, inclusive",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
 		return
 	}
 
-	customMetadata := make(map[string]string)
-	customMetadataSize := 0
-	for key, val := range r.Header {
-		if strings.HasPrefix(key, "X-Amz-Meta-") && len(val) > 0 {
-			customMetadata[key] = val[0]
-			customMetadataSize += len(key) + len(val[0])
-		}
+	mu, err := h.db.GetMultipartUpload(r.Context(), uploadID)
+	if err != nil {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "NoSuchUpload",
+			Message:   "The specified multipart upload does not exist. The upload ID might not be valid, or the multipart upload might have been aborted or completed.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
 	}
 
-	if customMetadataSize > 2048 {
+	if mu.BucketName != bucket.Name || mu.ObjectKey != key || mu.UserID != user.Id {
 		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "MetadataTooLarge",
-			Message:   "Your user metadata exceeds the maximum allowed size (2 KB)",
+			Code:      "AccessDenied",
+			Message:   "Access Denied",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -72,11 +69,8 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if this is an overwrite so we can clean up the old file later
-	existingObj, _ := h.db.GetObjectByKey(r.Context(), bucket.Id, key)
-
-	objectID := ksuid.New().String()
-	fw, err := fs.WriteFile(objectID)
+	partFileName := fmt.Sprintf("%s_%d", uploadID, partNumber)
+	fw, err := fs.WriteFile(partFileName)
 	if err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -95,7 +89,7 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	sizeBytes, err := io.Copy(multiWriter, r.Body)
 	if err != nil {
 		fw.Close()
-		_ = fs.DeleteFile(objectID)
+		_ = fs.DeleteFile(partFileName)
 		log.Printf("Error writing file: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -112,7 +106,7 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 	serverCRC32 := base64.StdEncoding.EncodeToString(CRC32Hash.Sum(nil))
 	clientCRC32 := query.Get("x-amz-checksum-crc32")
 	if clientCRC32 != "" && clientCRC32 != serverCRC32 {
-		_ = fs.DeleteFile(objectID)
+		_ = fs.DeleteFile(partFileName)
 		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InvalidDigest",
@@ -123,10 +117,10 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.db.CreateObject(r.Context(), bucket.Id, objectID, key, sizeBytes, contentType, etag, contentDisposition, contentLanguage, customMetadata)
+	err = h.db.SaveMultipartUploadPart(r.Context(), uploadID, partNumber, etag, sizeBytes)
 	if err != nil {
-		_ = fs.DeleteFile(objectID)
-		log.Printf("Database error creating object: %v\n", err)
+		_ = fs.DeleteFile(partFileName)
+		log.Printf("Database error saving part metadata: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
 			Message:   "An internal error occurred. Try again.",
@@ -134,14 +128,6 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Resource:  r.URL.Path,
 		})
 		return
-	}
-
-	// Delete the old object with the same key
-	if existingObj != nil {
-		err := fs.DeleteFile(existingObj.ObjectId)
-		if err != nil {
-			log.Printf("Failed to delete overwritten file %s: %v\n", existingObj.ObjectId, err)
-		}
 	}
 
 	w.Header().Set("ETag", fmt.Sprintf("\"%s\"", etag))

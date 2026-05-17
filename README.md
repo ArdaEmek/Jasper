@@ -29,7 +29,7 @@ A lightweight, S3-compatible cloud storage server written in Go. Self-host your 
 1. Clone the repository
 
 ```bash
-git clone https://github.com/yourusername/jasper.git
+git clone https://github.com/ArdaEmek/jasper.git
 cd jasper
 ```
 
@@ -111,12 +111,39 @@ Admin endpoints require the `ADMIN_ENDPOINT_KEY` in the `Authorization` header.
 ### S3-Compatible Endpoints
 S3 endpoints require AWS Signature V4 authentication via `Authorization` header or presigned URLs.
 
-| Method   | Endpoint              | Description        |
-|----------|----------------------|-------------------|
-| `PUT`    | `/{bucket}`          | Create a new bucket |
-| `GET`    | `/{bucket}/{key}`    | Retrieve object (supports HTTP Range requests) |
-| `HEAD`   | `/{bucket}/{key}`    | Get object metadata without downloading |
-| `PUT`    | `/{bucket}/{key}`    | Upload/overwrite an object |
+<details>
+<summary><strong>Bucket Operations</strong></summary>
+
+| Method | Endpoint    | Description         |
+|--------|-------------|---------------------|
+| `PUT`  | `/{bucket}` | Create a new bucket |
+
+</details>
+
+<details>
+<summary><strong>Object Operations</strong></summary>
+
+| Method | Endpoint            | Description                               |
+|--------|---------------------|-------------------------------------------|
+| `PUT`  | `/{bucket}/{key}`   | Upload/overwrite an object                |
+| `GET`  | `/{bucket}/{key}`   | Retrieve object (supports `Range` requests)|
+| `HEAD` | `/{bucket}/{key}`   | Get object metadata without downloading   |
+
+</details>
+
+<details>
+<summary><strong>Multipart Uploads</strong></summary>
+
+> **Note:** Completing a multipart upload currently merges all parts into a single physical file on disk (no virtual stitching). This behavior may change in future releases.
+
+| Method | Endpoint                                       | Description                     |
+|--------|------------------------------------------------|---------------------------------|
+| `POST` | `/{bucket}/{key}?uploads`                      | Create a multipart upload       |
+| `PUT`  | `/{bucket}/{key}?partNumber=n&uploadId=id`     | Upload a part                   |
+| `POST` | `/{bucket}/{key}?uploadId=id`                  | Complete a multipart upload     |
+| `GET`  | `/{bucket}/{key}?uploadId=id`                  | List parts of a multipart upload|
+
+</details>
 
 #### Range Requests
 GET requests support the standard HTTP `Range` header for partial downloads:
@@ -143,9 +170,10 @@ The server responds with `206 Partial Content` and the appropriate `Content-Rang
 | DeleteObject | ❌ | Not yet implemented |
 | CopyObject | ❌ | Not yet implemented |
 | **Multipart Upload** | | |
-| CreateMultipartUpload | ❌ | Not yet implemented |
-| UploadPart | ❌ | Not yet implemented |
-| CompleteMultipartUpload | ❌ | Not yet implemented |
+| CreateMultipartUpload | ✅ | Supported |
+| UploadPart | ✅ | Supported |
+| CompleteMultipartUpload | ✅ | Supported (Zero-copy Linux optimized) |
+| ListParts | ✅ | Supported |
 | AbortMultipartUpload | ❌ | Not yet implemented |
 | **Object Listing** | | |
 | ListObjects | ❌ | Not yet implemented |

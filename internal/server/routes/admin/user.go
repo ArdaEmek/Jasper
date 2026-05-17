@@ -13,6 +13,12 @@ type jsonData struct {
 	Id int `json:"id"`
 }
 
+type userResponse struct {
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
 func (h *Handler) userGET(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var data jsonData
@@ -35,7 +41,13 @@ func (h *Handler) userGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.SuccessResponse(w, res, 200)
+	response := userResponse{
+		Id:    res.Id,
+		Name:  res.Name,
+		Email: res.Email,
+	}
+
+	utils.SuccessResponse(w, response, 200)
 }
 
 func (h *Handler) userPOST(w http.ResponseWriter, r *http.Request) {

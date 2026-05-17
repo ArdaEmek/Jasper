@@ -61,6 +61,7 @@ var s3StatusMap = map[string]int{
 	"BucketAlreadyOwnedByYou": http.StatusBadRequest,
 	"EntityTooLarge":          http.StatusBadRequest, // File exceeds max size
 	"EntityTooSmall":          http.StatusBadRequest,
+	"MalformedXML":            http.StatusBadRequest,
 	"InvalidURI":              http.StatusBadRequest,
 	"MetadataTooLarge":        http.StatusBadRequest,
 	"KeyTooLongError":         http.StatusBadRequest,
@@ -73,23 +74,34 @@ var s3StatusMap = map[string]int{
 	"ServiceUnavailable": http.StatusServiceUnavailable,
 }
 
-func S3ErrorResponse(w http.ResponseWriter, e S3Error) {
-	statusCode, exists := s3StatusMap[e.Code]
-	if !exists {
-		statusCode = http.StatusInternalServerError
+func S3Response(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/xml")
+
+	statusCode := http.StatusOK
+
+	// Check if it's an error message and give the according status code
+	if e, ok := data.(S3Error); ok {
+		if code, exists := s3StatusMap[e.Code]; exists {
+			statusCode = code
+		} else {
+			statusCode = http.StatusInternalServerError
+		}
 	}
 
-	w.Header().Set("Content-Type", "application/xml")
 	w.WriteHeader(statusCode)
 
 	if _, err := w.Write([]byte(xml.Header)); err != nil {
 		log.Printf("Failed to write XML header: %v", err)
 	}
 
-	xmlData, err := xml.Marshal(e)
+	xmlData, err := xml.Marshal(data)
 	if err != nil {
-		log.Printf("Failed to encode S3 error: %v", err)
+		log.Printf("Failed to encode S3 response: %v", err)
 	} else if _, err := w.Write(xmlData); err != nil {
 		log.Printf("Failed to write XML data: %v", err)
 	}
+}
+
+func S3ErrorResponse(w http.ResponseWriter, e S3Error) {
+	S3Response(w, e)
 }
