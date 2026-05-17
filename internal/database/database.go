@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"sync"
 
@@ -43,9 +42,15 @@ type Service interface {
 	GetObjectByKey(ctx context.Context, bucketId int, objectKey string) (*Object, error)
 	GetObject(ctx context.Context, objectId string) (*Object, error)
 
+	CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string) error
+	GetMultipartUpload(ctx context.Context, uploadID string) (*MultipartUpload, error)
+	SaveMultipartUploadPart(ctx context.Context, uploadID string, partNumber int, etag string, size int64) error
+	ListMultipartUploadParts(ctx context.Context, uploadID string, partNumberMarker int, maxParts int) ([]MultipartUploadPart, error)
+	DeleteMultipartUpload(ctx context.Context, uploadID string) error
+
 	// ValidatePresignedUrl verifies an S3-compatible presigned URL's expiration and constraints.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.
-	ValidatePresignedUrl(ctx context.Context, query url.Values) (*User, *ApiKey, *AuthError)
+	ValidatePresignedUrl(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError)
 	// ValidateHeaderAuth verifies S3-compatible authentication credentials provided in the HTTP request headers.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.
 	ValidateHeaderAuth(ctx context.Context, r *http.Request) (*User, *ApiKey, *AuthError)

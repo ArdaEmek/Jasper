@@ -16,6 +16,15 @@ type postApiKeyData struct {
 	PermissionLevel string `json:"permission_level"`
 }
 
+type apiKeyResponse struct {
+	Id              int    `json:"id"`
+	UserId          int    `json:"user_id"`
+	AccessKey       string `json:"access_key"`
+	SecretKey       string `json:"secret_key"`
+	PermissionLevel string `json:"permission_level"`
+	CreatedAt       string `json:"created_at"`
+}
+
 func (h *Handler) apikeyGET(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var data apiKeyGetRequest
@@ -33,7 +42,19 @@ func (h *Handler) apikeyGET(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.SuccessResponse(w, keys, 200)
+	var resKeys []apiKeyResponse
+	for _, key := range keys {
+		resKeys = append(resKeys, apiKeyResponse{
+			Id:              key.Id,
+			UserId:          key.UserId,
+			AccessKey:       key.AccessKey,
+			SecretKey:       key.SecretKey,
+			PermissionLevel: key.PermissionLevel,
+			CreatedAt:       key.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		})
+	}
+
+	utils.SuccessResponse(w, resKeys, 200)
 }
 
 func (h *Handler) apikeyPOST(w http.ResponseWriter, r *http.Request) {
@@ -59,5 +80,14 @@ func (h *Handler) apikeyPOST(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	utils.SuccessResponse(w, apiKey, 201)
+	res := apiKeyResponse{
+		Id:              apiKey.Id,
+		UserId:          apiKey.UserId,
+		AccessKey:       apiKey.AccessKey,
+		SecretKey:       apiKey.SecretKey,
+		PermissionLevel: apiKey.PermissionLevel,
+		CreatedAt:       apiKey.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	utils.SuccessResponse(w, res, 201)
 }

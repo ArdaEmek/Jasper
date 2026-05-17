@@ -9,11 +9,11 @@ import (
 )
 
 type Bucket struct {
-	Id        int       `json:"id"`
-	Name      string    `json:"name"`
-	OwnerId   int       `json:"email"`
-	Region    string    `json:"region"`
-	CreatedAt time.Time `json:"created_at"`
+	Id        int
+	Name      string
+	OwnerId   int
+	Region    string
+	CreatedAt time.Time
 }
 
 func (s *service) CreateBucket(ctx context.Context, name string, ownerId int, region string) (*Bucket, error) {
