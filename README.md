@@ -134,6 +134,8 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 <details>
 <summary><strong>Multipart Uploads</strong></summary>
 
+> **Note:** Completing a multipart upload currently merges all parts into a single physical file on disk (no virtual stitching). This behavior may change in future releases.
+
 | Method | Endpoint                                       | Description                     |
 |--------|------------------------------------------------|---------------------------------|
 | `POST` | `/{bucket}/{key}?uploads`                      | Create a multipart upload       |
