@@ -21,6 +21,7 @@ func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{bucket}/{key...}", h.getRouter)
 	mux.HandleFunc("PUT /{bucket}/{key...}", h.putRouter)
 	mux.HandleFunc("POST /{bucket}/{key...}", h.postRouter)
+	mux.HandleFunc("DELETE /{bucket}/{key...}", h.middleware(h.delObjectHandler))
 
 	mux.HandleFunc("PUT /{bucket}", h.putBucketHandler)
 }
@@ -33,6 +34,11 @@ func (h *Handler) postRouter(w http.ResponseWriter, r *http.Request) {
 
 	if r.URL.Query().Has("uploadId") {
 		h.middleware(h.completeMultipartUploadHandler)(w, r)
+		return
+	}
+
+	if r.URL.Query().Has("delete") {
+		h.middleware(h.multiDeleteHandler)(w, r)
 		return
 	}
 
