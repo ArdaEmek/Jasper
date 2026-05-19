@@ -38,3 +38,31 @@ type ListPartsResponse struct {
 	IsTruncated          bool                           `xml:"IsTruncated"`
 	Parts                []database.MultipartUploadPart `xml:"Part"`
 }
+
+type DeleteObjectsRequest struct {
+	XMLName xml.Name       `xml:"Delete"`
+	Quiet   bool           `xml:"Quiet"`
+	Objects []DeleteObject `xml:"Object"`
+}
+
+type DeleteObject struct {
+	Key  string `xml:"Key"`
+	ETag string `xml:"ETag,omitempty"`
+	Size *int64 `xml:"Size,omitempty"`
+}
+
+type DeleteObjectsResult struct {
+	XMLName xml.Name        `xml:"http://s3.amazonaws.com/doc/2006-03-01/ DeleteResult"`
+	Deleted []DeletedObject `xml:"Deleted,omitempty"`
+	Errors  []DeleteError   `xml:"Error,omitempty"`
+}
+
+type DeletedObject struct {
+	Key string `xml:"Key"`
+}
+
+type DeleteError struct {
+	Key     string `xml:"Key"`
+	Code    string `xml:"Code"`
+	Message string `xml:"Message"`
+}
