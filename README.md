@@ -156,34 +156,34 @@ The server responds with `206 Partial Content` and the appropriate `Content-Rang
 
 ## Supported S3 Operations
 
-| Operation | Status | Notes |
-|-----------|--------|-------|
-| **Bucket Operations** | | |
-| CreateBucket | ✅ | Put bucket endpoint |
-| DeleteBucket | ❌ | Not yet implemented |
-| ListBuckets | ❌ | Not yet implemented |
-| GetBucketLocation | ❌ | Not yet implemented |
-| **Object Operations** | | |
-| PutObject | ✅ | Upload/overwrite objects with metadata |
-| GetObject | ✅ | Download objects with Range request support |
-| HeadObject | ✅ | Get object metadata without body |
-| DeleteObject | ❌ | Not yet implemented |
-| CopyObject | ❌ | Not yet implemented |
-| **Multipart Upload** | | |
-| CreateMultipartUpload | ✅ | Supported |
-| UploadPart | ✅ | Supported |
-| CompleteMultipartUpload | ✅ | Supported (Zero-copy Linux optimized) |
-| ListParts | ✅ | Supported |
-| AbortMultipartUpload | ❌ | Not yet implemented |
-| **Object Listing** | | |
-| ListObjects | ❌ | Not yet implemented |
-| ListObjectsV2 | ❌ | Not yet implemented |
-| **ACL & Permissions** | | |
-| PutObjectAcl | ❌ | Not yet implemented |
-| GetObjectAcl | ❌ | Not yet implemented |
-| **Tagging** | | |
-| PutObjectTagging | ❌ | Not yet implemented |
-| GetObjectTagging | ❌ | Not yet implemented |
+| Operation | Status | Notes                                  |
+|-----------|--------|----------------------------------------|
+| **Bucket Operations** | |                                        |
+| CreateBucket | ✅ | Supported                              |
+| DeleteBucket | ❌ | Not yet implemented                    |
+| ListBuckets | ❌ | Not yet implemented                    |
+| GetBucketLocation | ❌ | Not yet implemented                    |
+| **Object Operations** | |                                        |
+| PutObject | ✅ | Supported                              |
+| GetObject | ✅ | Supported                              |
+| HeadObject | ✅ | Supported                              |
+| DeleteObject | ✅ | Supported (Multiple objects supported) |
+| CopyObject | ❌ | Not yet implemented                    |
+| **Multipart Upload** | |                                        |
+| CreateMultipartUpload | ✅ | Supported                              |
+| UploadPart | ✅ | Supported                              |
+| CompleteMultipartUpload | ✅ | Supported (Zero-copy Linux optimized)  |
+| ListParts | ✅ | Supported                              |
+| AbortMultipartUpload | ❌ | Not yet implemented                    |
+| **Object Listing** | |                                        |
+| ListObjects | ❌ | Not yet implemented                    |
+| ListObjectsV2 | ❌ | Not yet implemented                    |
+| **ACL & Permissions** | |                                        |
+| PutObjectAcl | ❌ | Not yet implemented                    |
+| GetObjectAcl | ❌ | Not yet implemented                    |
+| **Tagging** | |                                        |
+| PutObjectTagging | ❌ | Not yet implemented                    |
+| GetObjectTagging | ❌ | Not yet implemented                    |
 
 ## Usage Examples
 
