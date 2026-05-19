@@ -6,6 +6,8 @@ import (
 	"s3/internal/database"
 	"s3/internal/filesystem"
 	"s3/internal/server/utils"
+	"strconv"
+	"strings"
 )
 
 func (h *Handler) delObjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -21,6 +23,31 @@ func (h *Handler) delObjectHandler(w http.ResponseWriter, r *http.Request) {
 			Resource:  r.URL.Path,
 		})
 		return
+	}
+
+	expectedOwner := r.Header.Get("X-Amz-Expected-Bucket-Owner")
+	if expectedOwner == "" {
+		expectedOwner = r.URL.Query().Get("x-amz-expected-bucket-owner")
+	}
+
+	if expectedOwner != "" && expectedOwner != strconv.Itoa(bucket.OwnerId) {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "AccessDenied",
+			Message:   "Access Denied",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	reqETag := r.Header.Get("If-Match")
+	if reqETag == "" {
+		reqETag = r.URL.Query().Get("if-match")
+	}
+
+	reqSize := r.Header.Get("X-Amz-If-Match-Size")
+	if reqSize == "" {
+		reqSize = r.URL.Query().Get("x-amz-if-match-size")
 	}
 
 	key := r.PathValue("key")
@@ -47,8 +74,46 @@ func (h *Handler) delObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if existingObj == nil {
+		if reqETag != "" || reqSize != "" {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "PreconditionFailed",
+				Message:   "At least one of the pre-conditions you specified did not hold",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+
 		w.WriteHeader(http.StatusNoContent)
 		return
+	}
+
+	if reqETag != "" {
+		reqETag := strings.Trim(reqETag, `"`)
+		dbETag := strings.Trim(existingObj.ETag, `"`)
+
+		if reqETag != dbETag {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "PreconditionFailed",
+				Message:   "At least one of the pre-conditions you specified did not hold",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+	}
+
+	if reqSize != "" {
+		expectedSize, err := strconv.ParseInt(reqSize, 10, 64)
+		if err != nil || expectedSize != existingObj.SizeBytes {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "PreconditionFailed",
+				Message:   "At least one of the pre-conditions you specified did not hold",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
 	}
 
 	err = h.db.DeleteObject(r.Context(), bucket.Id, key)
