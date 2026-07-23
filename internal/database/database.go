@@ -41,6 +41,7 @@ type Service interface {
 	) (*Object, error)
 	GetObjectByKey(ctx context.Context, bucketId int, objectKey string) (*Object, error)
 	GetObject(ctx context.Context, objectId string) (*Object, error)
+	ListObjectsV2(ctx context.Context, bucketId int, prefix string, continuationToken string, startAfter string, maxKeys int) (*ListObjectsV2Result, error)
 	DeleteObject(ctx context.Context, bucketId int, objectKey string) error
 
 	CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string) error
