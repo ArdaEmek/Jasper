@@ -22,8 +22,7 @@ CREATE TABLE multipart_upload_parts
     upload_id   VARCHAR(255) NOT NULL,
     part_number INT          NOT NULL CHECK (part_number > 0 AND part_number <= 10000),
     etag        VARCHAR(255) NOT NULL,
-    size        BIGINT       NOT NULL CHECK (size >= 0
-) ,
+    size        BIGINT       NOT NULL CHECK (size >= 0),
     created_at  TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE (upload_id, part_number),
