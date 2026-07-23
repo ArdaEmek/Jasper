@@ -143,6 +143,7 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 | `PUT`  | `/{bucket}/{key}?partNumber=n&uploadId=id` | Upload a part |
 | `POST` | `/{bucket}/{key}?uploadId=id`              | Complete a multipart upload |
 | `GET`  | `/{bucket}/{key}?uploadId=id`              | List parts of a multipart upload |
+| `DELETE` | `/{bucket}/{key}?uploadId=id`              | Abort a multipart upload and remove part files   |
 | `POST` | `/{bucket}?delete`                         | Multi-Object Delete (Batch delete objects) |
 
 </details>
@@ -176,7 +177,7 @@ The server responds with `206 Partial Content` and the appropriate `Content-Rang
 | UploadPart | ✅ | Supported                              |
 | CompleteMultipartUpload | ✅ | Supported (Zero-copy Linux optimized)  |
 | ListParts | ✅ | Supported                              |
-| AbortMultipartUpload | ❌ | Not yet implemented                    |
+| AbortMultipartUpload | ✅ | Supported                              |
 | **Object Listing** | |                                        |
 | ListObjects | ✅ | Supported                              |
 | ListObjectsV2 | ✅ | Supported                              |

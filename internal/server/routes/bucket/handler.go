@@ -101,6 +101,12 @@ func (h *Handler) deleteRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Checks if request is AbortMultipartUpload
+	if r.URL.Query().Has("uploadId") {
+		h.middleware(h.abortMultipartUploadHandler)(w, r)
+		return
+	}
+
 	h.middleware(h.delObjectHandler)(w, r)
 }
 
