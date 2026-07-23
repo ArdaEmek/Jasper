@@ -3,6 +3,7 @@ package utils
 import (
 	"encoding/xml"
 	"s3/internal/database"
+	"time"
 )
 
 type CreateMultipartUploadResponse struct {
@@ -25,6 +26,33 @@ type CompleteMultipartUploadResponse struct {
 	Bucket   string   `xml:"Bucket"`
 	Key      string   `xml:"Key"`
 	ETag     string   `xml:"ETag"`
+}
+
+type ObjectItemResponse struct {
+	Key          string    `xml:"Key"`
+	LastModified time.Time `xml:"LastModified"`
+	ETag         string    `xml:"ETag"`
+	Size         int64     `xml:"Size"`
+	Owner        int       `xml:"Owner,omitempty"`
+}
+
+type CommonPrefixResponse struct {
+	Prefix string `xml:"Prefix"`
+}
+
+type ListBucketResultV2Response struct {
+	XMLName               xml.Name               `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListBucketResult"`
+	Name                  string                 `xml:"Name"`
+	Prefix                string                 `xml:"Prefix"`
+	MaxKeys               int                    `xml:"MaxKeys"`
+	KeyCount              int                    `xml:"KeyCount"`
+	Delimiter             string                 `xml:"Delimiter,omitempty"`
+	IsTruncated           bool                   `xml:"IsTruncated"`
+	ContinuationToken     string                 `xml:"ContinuationToken,omitempty"`
+	NextContinuationToken string                 `xml:"NextContinuationToken,omitempty"`
+	StartAfter            string                 `xml:"StartAfter,omitempty"`
+	Contents              []ObjectItemResponse   `xml:"Contents"`
+	CommonPrefixes        []CommonPrefixResponse `xml:"CommonPrefixes,omitempty"`
 }
 
 type ListPartsResponse struct {
