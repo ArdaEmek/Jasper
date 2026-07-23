@@ -161,7 +161,7 @@ func (h *Handler) multiDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	utils.S3Response(w, utils.DeleteObjectsResult{
+	utils.S3Response(w, utils.DeleteObjectsResponse{
 		Deleted: deleted,
 		Errors:  errors,
 	})
