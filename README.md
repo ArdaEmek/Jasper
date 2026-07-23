@@ -8,7 +8,6 @@ A lightweight, S3-compatible cloud storage server written in Go. Self-host your 
 - S3-compatible REST API
 - Bucket & object management
 - PostgreSQL-backed metadata storage
-- Redis caching layer
 - TLS 1.3 enforced
 - Token-based admin authentication
 - CORS middleware
@@ -91,8 +90,6 @@ Browsers discover HTTP/3 automatically:
 | `DB_USERNAME`            | Database user                        | —                  |
 | `DB_PASSWORD`            | Database password                    | —                  |
 | `DB_SCHEMA`              | Database schema                      | `public`           |
-| `REDIS_ADDR`             | Redis server address                 | —                  |
-| `REDIS_PASSWORD`         | Redis password                       | —                  |
 | `ADMIN_ENDPOINT_ENABLED` | Enable admin endpoints               | `false`            |
 | `ADMIN_ENDPOINT_KEY`     | Admin endpoint authentication token  | —                  |
 
