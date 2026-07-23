@@ -69,9 +69,15 @@ var s3StatusMap = map[string]int{
 	// 409 - Conflict
 	"BucketNotEmpty": http.StatusConflict,
 
+	// 412 - Precondition Failed
+	"PreconditionFailed": http.StatusPreconditionFailed,
+
 	// 500 - Server Errors
 	"InternalError":      http.StatusInternalServerError,
 	"ServiceUnavailable": http.StatusServiceUnavailable,
+
+	// 501 - Server Errors
+	"NotImplemented": http.StatusNotImplemented,
 }
 
 func S3Response(w http.ResponseWriter, data interface{}) {

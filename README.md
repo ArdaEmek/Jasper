@@ -8,7 +8,6 @@ A lightweight, S3-compatible cloud storage server written in Go. Self-host your 
 - S3-compatible REST API
 - Bucket & object management
 - PostgreSQL-backed metadata storage
-- Redis caching layer
 - TLS 1.3 enforced
 - Token-based admin authentication
 - CORS middleware
@@ -91,8 +90,6 @@ Browsers discover HTTP/3 automatically:
 | `DB_USERNAME`            | Database user                        | —                  |
 | `DB_PASSWORD`            | Database password                    | —                  |
 | `DB_SCHEMA`              | Database schema                      | `public`           |
-| `REDIS_ADDR`             | Redis server address                 | —                  |
-| `REDIS_PASSWORD`         | Redis password                       | —                  |
 | `ADMIN_ENDPOINT_ENABLED` | Enable admin endpoints               | `false`            |
 | `ADMIN_ENDPOINT_KEY`     | Admin endpoint authentication token  | —                  |
 
@@ -116,7 +113,10 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 
 | Method | Endpoint    | Description         |
 |--------|-------------|---------------------|
-| `PUT`  | `/{bucket}` | Create a new bucket |
+| `GET`  | `/`      | List all buckets owned by the authenticated user |
+| `GET`    | `/{bucket}`       | List objects in a bucket (`ListObjectsV2`) |
+| `PUT`    | `/{bucket}`       | Create a new bucket |
+| `DELETE` | `/{bucket}`       | Delete an empty bucket |
 
 </details>
 
@@ -125,9 +125,10 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 
 | Method | Endpoint            | Description                               |
 |--------|---------------------|-------------------------------------------|
-| `PUT`  | `/{bucket}/{key}`   | Upload/overwrite an object                |
-| `GET`  | `/{bucket}/{key}`   | Retrieve object (supports `Range` requests)|
-| `HEAD` | `/{bucket}/{key}`   | Get object metadata without downloading   |
+| `PUT`    | `/{bucket}/{key}` | Upload/overwrite an object |
+| `GET`    | `/{bucket}/{key}` | Retrieve object (supports `Range` requests) |
+| `HEAD`   | `/{bucket}/{key}` | Get object metadata without downloading |
+| `DELETE` | `/{bucket}/{key}` | Delete an object |
 
 </details>
 
@@ -138,10 +139,12 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 
 | Method | Endpoint                                       | Description                     |
 |--------|------------------------------------------------|---------------------------------|
-| `POST` | `/{bucket}/{key}?uploads`                      | Create a multipart upload       |
-| `PUT`  | `/{bucket}/{key}?partNumber=n&uploadId=id`     | Upload a part                   |
-| `POST` | `/{bucket}/{key}?uploadId=id`                  | Complete a multipart upload     |
-| `GET`  | `/{bucket}/{key}?uploadId=id`                  | List parts of a multipart upload|
+| `POST` | `/{bucket}/{key}?uploads`                  | Create a multipart upload |
+| `PUT`  | `/{bucket}/{key}?partNumber=n&uploadId=id` | Upload a part |
+| `POST` | `/{bucket}/{key}?uploadId=id`              | Complete a multipart upload |
+| `GET`  | `/{bucket}/{key}?uploadId=id`              | List parts of a multipart upload |
+| `DELETE` | `/{bucket}/{key}?uploadId=id`              | Abort a multipart upload and remove part files   |
+| `POST` | `/{bucket}?delete`                         | Multi-Object Delete (Batch delete objects) |
 
 </details>
 
@@ -156,34 +159,34 @@ The server responds with `206 Partial Content` and the appropriate `Content-Rang
 
 ## Supported S3 Operations
 
-| Operation | Status | Notes |
-|-----------|--------|-------|
-| **Bucket Operations** | | |
-| CreateBucket | ✅ | Put bucket endpoint |
-| DeleteBucket | ❌ | Not yet implemented |
-| ListBuckets | ❌ | Not yet implemented |
-| GetBucketLocation | ❌ | Not yet implemented |
-| **Object Operations** | | |
-| PutObject | ✅ | Upload/overwrite objects with metadata |
-| GetObject | ✅ | Download objects with Range request support |
-| HeadObject | ✅ | Get object metadata without body |
-| DeleteObject | ❌ | Not yet implemented |
-| CopyObject | ❌ | Not yet implemented |
-| **Multipart Upload** | | |
-| CreateMultipartUpload | ✅ | Supported |
-| UploadPart | ✅ | Supported |
-| CompleteMultipartUpload | ✅ | Supported (Zero-copy Linux optimized) |
-| ListParts | ✅ | Supported |
-| AbortMultipartUpload | ❌ | Not yet implemented |
-| **Object Listing** | | |
-| ListObjects | ❌ | Not yet implemented |
-| ListObjectsV2 | ❌ | Not yet implemented |
-| **ACL & Permissions** | | |
-| PutObjectAcl | ❌ | Not yet implemented |
-| GetObjectAcl | ❌ | Not yet implemented |
-| **Tagging** | | |
-| PutObjectTagging | ❌ | Not yet implemented |
-| GetObjectTagging | ❌ | Not yet implemented |
+| Operation | Status | Notes                                  |
+|-----------|--------|----------------------------------------|
+| **Bucket Operations** | |                                        |
+| CreateBucket | ✅ | Supported                              |
+| DeleteBucket | ✅ | Supported                              |
+| ListBuckets | ✅ | Supported                              |
+| GetBucketLocation | ❌ | Multi-location is not supported        |
+| **Object Operations** | |                                        |
+| PutObject | ✅ | Supported                              |
+| GetObject | ✅ | Supported                              |
+| HeadObject | ✅ | Supported                              |
+| DeleteObject | ✅ | Supported (Multiple objects supported) |
+| CopyObject | ❌ | Not yet implemented                    |
+| **Multipart Upload** | |                                        |
+| CreateMultipartUpload | ✅ | Supported                              |
+| UploadPart | ✅ | Supported                              |
+| CompleteMultipartUpload | ✅ | Supported (Zero-copy Linux optimized)  |
+| ListParts | ✅ | Supported                              |
+| AbortMultipartUpload | ✅ | Supported                              |
+| **Object Listing** | |                                        |
+| ListObjects | ✅ | Supported                              |
+| ListObjectsV2 | ✅ | Supported                              |
+| **ACL & Permissions** | |                                        |
+| PutObjectAcl | ❌ | Not yet implemented                    |
+| GetObjectAcl | ❌ | Not yet implemented                    |
+| **Tagging** | |                                        |
+| PutObjectTagging | ❌ | Not yet implemented                    |
+| GetObjectTagging | ❌ | Not yet implemented                    |
 
 ## Usage Examples
 

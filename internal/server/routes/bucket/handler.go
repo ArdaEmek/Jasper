@@ -18,11 +18,19 @@ func New() *Handler {
 }
 
 func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
+	mux.HandleFunc("GET /", h.listBucketsHandler)
+
+	mux.HandleFunc("GET /{bucket}", h.getRouter)
 	mux.HandleFunc("GET /{bucket}/{key...}", h.getRouter)
+
+	mux.HandleFunc("PUT /{bucket}", h.putRouter)
 	mux.HandleFunc("PUT /{bucket}/{key...}", h.putRouter)
+
+	mux.HandleFunc("POST /{bucket}", h.postRouter)
 	mux.HandleFunc("POST /{bucket}/{key...}", h.postRouter)
 
-	mux.HandleFunc("PUT /{bucket}", h.putBucketHandler)
+	mux.HandleFunc("DELETE /{bucket}", h.deleteRouter)
+	mux.HandleFunc("DELETE /{bucket}/{key...}", h.deleteRouter)
 }
 
 func (h *Handler) postRouter(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +44,11 @@ func (h *Handler) postRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if r.URL.Query().Has("delete") {
+		h.middleware(h.multiDeleteHandler)(w, r)
+		return
+	}
+
 	utils.S3ErrorResponse(w, utils.S3Error{
 		Code:     "NotImplemented",
 		Message:  "The functionality you requested is not implemented",
@@ -44,6 +57,14 @@ func (h *Handler) postRouter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getRouter(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("key")
+
+	// Checks if request is ListObjects
+	if key == "" || key == "/" {
+		h.middleware(h.listObjectsHandler)(w, r)
+		return
+	}
+
 	// Checks if request is ListParts
 	if r.URL.Query().Has("uploadId") {
 		h.middleware(h.listPartsHandler)(w, r)
@@ -55,6 +76,7 @@ func (h *Handler) getRouter(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) putRouter(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
+
 	// Checks if request is PutBucket
 	if key == "" || key == "/" {
 		h.putBucketHandler(w, r)
@@ -68,6 +90,24 @@ func (h *Handler) putRouter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.middleware(h.putObjectHandler)(w, r)
+}
+
+func (h *Handler) deleteRouter(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("key")
+
+	// Checks if request is DeleteBucket
+	if key == "" || key == "/" {
+		h.deleteBucketHandler(w, r)
+		return
+	}
+
+	// Checks if request is AbortMultipartUpload
+	if r.URL.Query().Has("uploadId") {
+		h.middleware(h.abortMultipartUploadHandler)(w, r)
+		return
+	}
+
+	h.middleware(h.delObjectHandler)(w, r)
 }
 
 func (h *Handler) middleware(next http.HandlerFunc) http.HandlerFunc {
