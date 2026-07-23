@@ -32,6 +32,9 @@ type Service interface {
 	// CreateBucket inserts a new Bucket into the database.
 	// Returns the created Bucket.
 	CreateBucket(ctx context.Context, name string, ownerId int, region string) (*Bucket, error)
+	DeleteBucket(ctx context.Context, name string, ownerId int, region string) error
+	ListBucketsByOwnerId(ctx context.Context, ownerId int) ([]Bucket, error)
+	IsBucketEmpty(ctx context.Context, bucketId int, bucketName string) (bool, error)
 
 	// CreateObject registers a newly uploaded file (object) in the database under the specified bucket.
 	// It stores the object's metadata, sizing, and custom headers. Returns the created Object.
