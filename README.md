@@ -116,7 +116,10 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 
 | Method | Endpoint    | Description         |
 |--------|-------------|---------------------|
-| `PUT`  | `/{bucket}` | Create a new bucket |
+| `GET`  | `/`      | List all buckets owned by the authenticated user |
+| `GET`    | `/{bucket}`       | List objects in a bucket (`ListObjectsV2`) |
+| `PUT`    | `/{bucket}`       | Create a new bucket |
+| `DELETE` | `/{bucket}`       | Delete an empty bucket |
 
 </details>
 
@@ -125,9 +128,10 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 
 | Method | Endpoint            | Description                               |
 |--------|---------------------|-------------------------------------------|
-| `PUT`  | `/{bucket}/{key}`   | Upload/overwrite an object                |
-| `GET`  | `/{bucket}/{key}`   | Retrieve object (supports `Range` requests)|
-| `HEAD` | `/{bucket}/{key}`   | Get object metadata without downloading   |
+| `PUT`    | `/{bucket}/{key}` | Upload/overwrite an object |
+| `GET`    | `/{bucket}/{key}` | Retrieve object (supports `Range` requests) |
+| `HEAD`   | `/{bucket}/{key}` | Get object metadata without downloading |
+| `DELETE` | `/{bucket}/{key}` | Delete an object |
 
 </details>
 
@@ -138,10 +142,11 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 
 | Method | Endpoint                                       | Description                     |
 |--------|------------------------------------------------|---------------------------------|
-| `POST` | `/{bucket}/{key}?uploads`                      | Create a multipart upload       |
-| `PUT`  | `/{bucket}/{key}?partNumber=n&uploadId=id`     | Upload a part                   |
-| `POST` | `/{bucket}/{key}?uploadId=id`                  | Complete a multipart upload     |
-| `GET`  | `/{bucket}/{key}?uploadId=id`                  | List parts of a multipart upload|
+| `POST` | `/{bucket}/{key}?uploads`                  | Create a multipart upload |
+| `PUT`  | `/{bucket}/{key}?partNumber=n&uploadId=id` | Upload a part |
+| `POST` | `/{bucket}/{key}?uploadId=id`              | Complete a multipart upload |
+| `GET`  | `/{bucket}/{key}?uploadId=id`              | List parts of a multipart upload |
+| `POST` | `/{bucket}?delete`                         | Multi-Object Delete (Batch delete objects) |
 
 </details>
 
