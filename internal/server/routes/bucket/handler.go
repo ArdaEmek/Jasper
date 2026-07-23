@@ -18,12 +18,16 @@ func New() *Handler {
 }
 
 func (h *Handler) RegisterEndpoints(mux *http.ServeMux) {
+	mux.HandleFunc("GET /{bucket}", h.getRouter)
 	mux.HandleFunc("GET /{bucket}/{key...}", h.getRouter)
-	mux.HandleFunc("PUT /{bucket}/{key...}", h.putRouter)
-	mux.HandleFunc("POST /{bucket}/{key...}", h.postRouter)
-	mux.HandleFunc("DELETE /{bucket}/{key...}", h.middleware(h.delObjectHandler))
 
 	mux.HandleFunc("PUT /{bucket}", h.putBucketHandler)
+	mux.HandleFunc("PUT /{bucket}/{key...}", h.putRouter)
+
+	mux.HandleFunc("POST /{bucket}", h.postRouter)
+	mux.HandleFunc("POST /{bucket}/{key...}", h.postRouter)
+
+	mux.HandleFunc("DELETE /{bucket}/{key...}", h.middleware(h.delObjectHandler))
 }
 
 func (h *Handler) postRouter(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +54,14 @@ func (h *Handler) postRouter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getRouter(w http.ResponseWriter, r *http.Request) {
+	key := r.PathValue("key")
+
+	// Checks if request is ListObjects
+	if key == "" || key == "/" {
+		h.middleware(h.listObjectsHandler)(w, r)
+		return
+	}
+
 	// Checks if request is ListParts
 	if r.URL.Query().Has("uploadId") {
 		h.middleware(h.listPartsHandler)(w, r)
@@ -61,6 +73,7 @@ func (h *Handler) getRouter(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) putRouter(w http.ResponseWriter, r *http.Request) {
 	key := r.PathValue("key")
+
 	// Checks if request is PutBucket
 	if key == "" || key == "/" {
 		h.putBucketHandler(w, r)

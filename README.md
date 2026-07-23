@@ -176,8 +176,8 @@ The server responds with `206 Partial Content` and the appropriate `Content-Rang
 | ListParts | ✅ | Supported                              |
 | AbortMultipartUpload | ❌ | Not yet implemented                    |
 | **Object Listing** | |                                        |
-| ListObjects | ❌ | Not yet implemented                    |
-| ListObjectsV2 | ❌ | Not yet implemented                    |
+| ListObjects | ✅ | Supported                              |
+| ListObjectsV2 | ✅ | Supported                              |
 | **ACL & Permissions** | |                                        |
 | PutObjectAcl | ❌ | Not yet implemented                    |
 | GetObjectAcl | ❌ | Not yet implemented                    |
