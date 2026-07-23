@@ -157,9 +157,9 @@ The server responds with `206 Partial Content` and the appropriate `Content-Rang
 |-----------|--------|----------------------------------------|
 | **Bucket Operations** | |                                        |
 | CreateBucket | ✅ | Supported                              |
-| DeleteBucket | ❌ | Not yet implemented                    |
-| ListBuckets | ❌ | Not yet implemented                    |
-| GetBucketLocation | ❌ | Not yet implemented                    |
+| DeleteBucket | ✅ | Supported                              |
+| ListBuckets | ✅ | Supported                              |
+| GetBucketLocation | ❌ | Multi-location is not supported        |
 | **Object Operations** | |                                        |
 | PutObject | ✅ | Supported                              |
 | GetObject | ✅ | Supported                              |
