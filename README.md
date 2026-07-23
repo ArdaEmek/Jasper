@@ -176,7 +176,7 @@ The server responds with `206 Partial Content` and the appropriate `Content-Rang
 | UploadPart | ✅ | Supported                              |
 | CompleteMultipartUpload | ✅ | Supported (Zero-copy Linux optimized)  |
 | ListParts | ✅ | Supported                              |
-| AbortMultipartUpload | ❌ | Not yet implemented                    |
+| AbortMultipartUpload | ✅ | Supported                              |
 | **Object Listing** | |                                        |
 | ListObjects | ✅ | Supported                              |
 | ListObjectsV2 | ✅ | Supported                              |
