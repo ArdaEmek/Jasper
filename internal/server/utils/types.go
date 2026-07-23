@@ -79,7 +79,7 @@ type DeleteObject struct {
 	Size *int64 `xml:"Size,omitempty"`
 }
 
-type DeleteObjectsResult struct {
+type DeleteObjectsResponse struct {
 	XMLName xml.Name        `xml:"http://s3.amazonaws.com/doc/2006-03-01/ DeleteResult"`
 	Deleted []DeletedObject `xml:"Deleted,omitempty"`
 	Errors  []DeleteError   `xml:"Error,omitempty"`
@@ -93,4 +93,25 @@ type DeleteError struct {
 	Key     string `xml:"Key"`
 	Code    string `xml:"Code"`
 	Message string `xml:"Message"`
+}
+
+type ListBucketsResponse struct {
+	XMLName xml.Name    `xml:"http://s3.amazonaws.com/doc/2006-03-01/ ListAllMyBucketsResult"`
+	Owner   BucketOwner `xml:"Owner"`
+	Buckets BucketList  `xml:"Buckets"`
+}
+
+type BucketOwner struct {
+	ID          string `xml:"ID"`
+	DisplayName string `xml:"DisplayName"`
+}
+
+type BucketList struct {
+	Buckets []BucketInfo `xml:"Bucket"`
+}
+
+type BucketInfo struct {
+	Name         string `xml:"Name"`
+	CreationDate string `xml:"CreationDate"`
+	BucketRegion string `xml:"BucketRegion"`
 }
