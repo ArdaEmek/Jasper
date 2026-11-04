@@ -12,7 +12,5 @@ RUN go build -o main cmd/api/main.go
 FROM alpine:3.23.4 AS prod
 WORKDIR /app
 COPY --from=build /app/main /app/main
-EXPOSE ${PORT}
+EXPOSE 8080
 CMD ["./main"]
-
-

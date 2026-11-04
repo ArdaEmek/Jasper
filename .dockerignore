@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+.env
+certs
+data
+*.exe
+*.test
+main
+docker-compose.yml
+README.md

@@ -65,6 +65,25 @@ make run
 
 The server will start on `https://localhost:8080` (both TCP for HTTP/1.1+HTTP/2 and UDP for HTTP/3).
 
+### Pull the published Docker image
+
+Pushes to the default branch and version tags publish an image to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/reptiled2/jasper:latest
+```
+
+For a private package, authenticate first with a GitHub token that has `read:packages`:
+
+```bash
+echo "$CR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+The image contains the server binary only. Mount your TLS certificates and provide the
+database, Redis, and other settings with environment variables when starting it. The
+application listens on port `8080` by default and requires both TCP and UDP access for
+HTTP/3.
+
 ### HTTP/3 Protocol Upgrade
 
 Browsers discover HTTP/3 automatically:
