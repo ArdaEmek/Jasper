@@ -81,10 +81,13 @@ echo "$CR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 
 The image contains the server binary only. Mount your TLS certificates and provide the
 database, Redis, and other settings with environment variables when starting it. The
-application listens on port `8080` by default and requires both TCP and UDP access for
-HTTP/3.
+application listens on port `8080` by default. Both TCP and UDP access are required when
+HTTP/3 is enabled.
 
 ### HTTP/3 Protocol Upgrade
+
+HTTP/3 is enabled by default. Set `HTTP3_ENABLED=false` to run only the TCP server
+(HTTP/1.1 and HTTP/2) and disable the `Alt-Svc` HTTP/3 advertisement.
 
 Browsers discover HTTP/3 automatically:
 
@@ -100,6 +103,7 @@ Browsers discover HTTP/3 automatically:
 |--------------------------|--------------------------------------|--------------------|
 | `APP_ENV`                | Application environment (`dev`, `development`, `local`, `production`) | `dev`    |
 | `PORT`                   | Port the server listens on (TCP + UDP) | `8080`           |
+| `HTTP3_ENABLED`          | Enable the HTTP/3 (QUIC) server and `Alt-Svc` advertisement | `true` |
 | `STORAGE_DIR`            | Local directory for object storage   | `./data`           |
 | `CERTIFICATE_PUBLIC_KEY` | Path to TLS certificate (PEM)        | `./certs/cert.pem` |
 | `CERTIFICATE_PRIVATE_KEY`| Path to TLS private key (PEM)        | `./certs/key.pem`  |

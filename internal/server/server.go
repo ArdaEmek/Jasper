@@ -22,7 +22,8 @@ type Server struct {
 	db   database.Service
 	fm   filesystem.FileManager
 
-	http3Server *http3.Server
+	http3Server  *http3.Server
+	http3Enabled bool
 }
 
 func NewServer() (*http.Server, *http3.Server) {
@@ -33,8 +34,9 @@ func NewServer() (*http.Server, *http3.Server) {
 	}
 
 	NewServer := &Server{
-		port: port,
-		fm:   fm,
+		port:         port,
+		fm:           fm,
+		http3Enabled: utils.IsHTTP3Enabled,
 
 		db: database.New(),
 	}
@@ -72,4 +74,8 @@ func NewServer() (*http.Server, *http3.Server) {
 	NewServer.http3Server = http3Server
 
 	return httpServer, http3Server
+}
+
+func IsHTTP3Enabled() bool {
+	return utils.IsHTTP3Enabled
 }

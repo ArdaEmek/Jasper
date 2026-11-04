@@ -34,8 +34,10 @@ func gracefulShutdown(httpServer *http.Server, http3Server *http3.Server, done c
 		log.Printf("HTTP/1.1 server forced to shutdown with error: %v", err)
 	}
 
-	if err := http3Server.Shutdown(ctx); err != nil {
-		log.Printf("HTTP/3 server forced to shutdown with error: %v", err)
+	if http3Server != nil {
+		if err := http3Server.Shutdown(ctx); err != nil {
+			log.Printf("HTTP/3 server forced to shutdown with error: %v", err)
+		}
 	}
 
 	log.Println("Server exiting")
@@ -50,14 +52,18 @@ func main() {
 	done := make(chan bool, 1)
 	go gracefulShutdown(httpServer, http3Server, done)
 
-	// Start HTTP/3 server in a goroutine
-	go func() {
-		log.Printf("HTTP/3 Server is running on %s\n", http3Server.Addr)
-		err := http3Server.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("HTTP/3 Server error: %v\n", err)
-		}
-	}()
+	if server.IsHTTP3Enabled() {
+		// Start HTTP/3 server in a goroutine
+		go func() {
+			log.Printf("HTTP/3 Server is running on %s\n", http3Server.Addr)
+			err := http3Server.ListenAndServe()
+			if err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Printf("HTTP/3 Server error: %v\n", err)
+			}
+		}()
+	} else {
+		log.Println("HTTP/3 server is disabled")
+	}
 
 	// Start HTTP/1.1 server
 	log.Printf("Server is running on %s\n", httpServer.Addr)

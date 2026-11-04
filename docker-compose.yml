@@ -9,6 +9,7 @@ services:
       - ${PORT}:${PORT}
     environment:
       APP_ENV: ${APP_ENV:-local}
+      HTTP3_ENABLED: ${HTTP3_ENABLED:-true}
       STORAGE_DIR: "/app/data"
       PORT: ${PORT}
       DB_HOST: "db"

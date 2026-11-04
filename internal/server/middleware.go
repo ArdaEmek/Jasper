@@ -10,7 +10,7 @@ import (
 func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Advertise HTTP/3 support
-		if r.ProtoMajor < 3 {
+		if s.http3Enabled && s.http3Server != nil && r.ProtoMajor < 3 {
 			s.http3Server.SetQUICHeaders(w.Header())
 		}
 
