@@ -76,7 +76,7 @@ The server will start on `https://localhost:8080` (both TCP for HTTP/1.1+HTTP/2 
 Pushes to the default branch and version tags publish an image to GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/reptiled2/jasper:latest
+docker pull ghcr.io/ardaemek/jasper:latest
 ```
 
 For a private package, authenticate first with a GitHub token that has `read:packages`:
@@ -96,7 +96,7 @@ separate one-shot task before starting Jasper:
 ```bash
 docker run --rm \
   --env-file jasper.env \
-  ghcr.io/reptiled2/jasper:1.0.96 \
+  ghcr.io/ardaemek/jasper:1.0.96 \
   migrate up
 ```
 
@@ -108,7 +108,7 @@ docker run -d \
   --env-file jasper.env \
   -p 8080:8080 \
   -v ./certs:/app/certs:ro \
-  ghcr.io/reptiled2/jasper:1.0.96
+  ghcr.io/ardaemek/jasper:1.0.96
 ```
 
 `DATABASE_URL` must be available to the migration task. The server container also
