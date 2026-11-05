@@ -57,7 +57,13 @@ openssl req -x509 -newkey rsa:2048 -nodes -keyout certs/key.pem -out certs/cert.
 make docker-run
 ```
 
-5. Run the application
+5. Apply database migrations
+
+```bash
+make migrate
+```
+
+6. Run the application
 
 ```bash
 make run
@@ -79,10 +85,40 @@ For a private package, authenticate first with a GitHub token that has `read:pac
 echo "$CR_PAT" | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 ```
 
-The image contains the server binary only. Mount your TLS certificates and provide the
-database, Redis, and other settings with environment variables when starting it. The
-application listens on port `8080` by default. Both TCP and UDP access are required when
-HTTP/3 is enabled.
+The image contains the server binary, migration files, and `dbmate`. Mount your TLS
+certificates and provide the database, Redis, and other settings with environment
+variables when starting it. The application listens on port `8080` by default. Both
+TCP and UDP access are required when HTTP/3 is enabled.
+
+The image also contains the database migrations and `dbmate`. Run migrations as a
+separate one-shot task before starting Jasper:
+
+```bash
+docker run --rm \
+  --env-file jasper.env \
+  ghcr.io/reptiled2/jasper:1.0.96 \
+  migrate up
+```
+
+The same versioned image can then be started normally:
+
+```bash
+docker run -d \
+  --name jasper \
+  --env-file jasper.env \
+  -p 8080:8080 \
+  -v ./certs:/app/certs:ro \
+  ghcr.io/reptiled2/jasper:1.0.96
+```
+
+`DATABASE_URL` must be available to the migration task. The server container also
+requires `CERTIFICATE_PUBLIC_KEY` and `CERTIFICATE_PRIVATE_KEY`; when using the
+example certificate mount, set them to `/app/certs/cert.pem` and
+`/app/certs/key.pem`. `STORAGE_DIR` defaults to `/app/data`.
+
+The consuming project should run the migration task successfully before rolling out
+the Jasper container; Jasper does not apply migrations automatically during server
+startup.
 
 ### HTTP/3 Protocol Upgrade
 
