@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -27,22 +28,21 @@ var (
 )
 
 func New(path string) (FileManager, error) {
-	err := os.MkdirAll(path, 0750)
-	if err != nil {
-		if os.IsExist(err) {
-			log.Println("Storage not found, creating a new one.")
-		} else {
-			return nil, err
-		}
+	if path == "" {
+		path = "./data"
+	}
+
+	if err := os.MkdirAll(path, 0750); err != nil {
+		return nil, fmt.Errorf("create storage directory %q: %w", path, err)
 	}
 
 	once.Do(func() {
 		fmInstance = &fileManager{
-			path,
+			workingDir: path,
 		}
 	})
 
-	log.Println("Storage initialized.")
+	log.Printf("Storage initialized at %s.", path)
 	return fmInstance, nil
 }
 

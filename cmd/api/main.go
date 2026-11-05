@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -47,7 +48,11 @@ func gracefulShutdown(httpServer *http.Server, http3Server *http3.Server, done c
 }
 
 func main() {
-	httpServer, http3Server := server.NewServer()
+	httpServer, http3Server, err := server.NewServer()
+	if err != nil {
+		log.Printf("Server initialization failed: %v", err)
+		os.Exit(1)
+	}
 
 	done := make(chan bool, 1)
 	go gracefulShutdown(httpServer, http3Server, done)
@@ -67,7 +72,7 @@ func main() {
 
 	// Start HTTP/1.1 server
 	log.Printf("Server is running on %s\n", httpServer.Addr)
-	err := httpServer.ListenAndServeTLS("", "")
+	err = httpServer.ListenAndServeTLS("", "")
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Printf("HTTP/1.1 Server error: %v\n", err)
 	}

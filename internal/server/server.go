@@ -26,11 +26,11 @@ type Server struct {
 	http3Enabled bool
 }
 
-func NewServer() (*http.Server, *http3.Server) {
+func NewServer() (*http.Server, *http3.Server, error) {
 	port, _ := strconv.Atoi(os.Getenv("PORT"))
 	fm, err := filesystem.New(os.Getenv("STORAGE_DIR"))
 	if err != nil {
-		panic(err)
+		return nil, nil, fmt.Errorf("initialize storage: %w", err)
 	}
 
 	NewServer := &Server{
@@ -45,7 +45,7 @@ func NewServer() (*http.Server, *http3.Server) {
 	key := os.Getenv("CERTIFICATE_PRIVATE_KEY")
 	tlsCert, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
-		panic(err)
+		return nil, nil, fmt.Errorf("load TLS certificate and key: %w", err)
 	}
 
 	tlsConfig := &tls.Config{
@@ -73,7 +73,7 @@ func NewServer() (*http.Server, *http3.Server) {
 
 	NewServer.http3Server = http3Server
 
-	return httpServer, http3Server
+	return httpServer, http3Server, nil
 }
 
 func IsHTTP3Enabled() bool {
