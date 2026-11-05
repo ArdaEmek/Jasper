@@ -41,17 +41,20 @@ func NewServer() (*http.Server, *http3.Server, error) {
 		db: database.New(),
 	}
 
-	cert := os.Getenv("CERTIFICATE_PUBLIC_KEY")
-	key := os.Getenv("CERTIFICATE_PRIVATE_KEY")
-	tlsCert, err := tls.LoadX509KeyPair(cert, key)
-	if err != nil {
-		return nil, nil, fmt.Errorf("load TLS certificate and key: %w", err)
-	}
+	var tlsConfig *tls.Config
+	if utils.IsHTTP3Enabled {
+		cert := os.Getenv("CERTIFICATE_PUBLIC_KEY")
+		key := os.Getenv("CERTIFICATE_PRIVATE_KEY")
+		tlsCert, err := tls.LoadX509KeyPair(cert, key)
+		if err != nil {
+			return nil, nil, fmt.Errorf("load TLS certificate and key: %w", err)
+		}
 
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: utils.IsDev,
-		MinVersion:         tls.VersionTLS13,
-		Certificates:       []tls.Certificate{tlsCert},
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: utils.IsDev,
+			MinVersion:         tls.VersionTLS13,
+			Certificates:       []tls.Certificate{tlsCert},
+		}
 	}
 
 	// HTTP1 Server
@@ -64,14 +67,16 @@ func NewServer() (*http.Server, *http3.Server, error) {
 		TLSConfig:    tlsConfig,
 	}
 
-	http3Server := &http3.Server{
-		Addr:       fmt.Sprintf(":%d", NewServer.port),
-		Handler:    NewServer.RegisterRoutes(),
-		TLSConfig:  http3.ConfigureTLSConfig(tlsConfig),
-		QUICConfig: &quic.Config{},
+	var http3Server *http3.Server
+	if utils.IsHTTP3Enabled {
+		http3Server = &http3.Server{
+			Addr:       fmt.Sprintf(":%d", NewServer.port),
+			Handler:    NewServer.RegisterRoutes(),
+			TLSConfig:  http3.ConfigureTLSConfig(tlsConfig),
+			QUICConfig: &quic.Config{},
+		}
+		NewServer.http3Server = http3Server
 	}
-
-	NewServer.http3Server = http3Server
 
 	return httpServer, http3Server, nil
 }

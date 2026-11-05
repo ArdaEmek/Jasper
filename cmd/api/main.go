@@ -72,7 +72,11 @@ func main() {
 
 	// Start HTTP/1.1 server
 	log.Printf("Server is running on %s\n", httpServer.Addr)
-	err = httpServer.ListenAndServeTLS("", "")
+	if server.IsHTTP3Enabled() {
+		err = httpServer.ListenAndServeTLS("", "")
+	} else {
+		err = httpServer.ListenAndServe()
+	}
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Printf("HTTP/1.1 Server error: %v\n", err)
 	}

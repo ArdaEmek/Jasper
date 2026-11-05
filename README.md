@@ -122,8 +122,8 @@ startup.
 
 ### HTTP/3 Protocol Upgrade
 
-HTTP/3 is enabled by default. Set `HTTP3_ENABLED=false` to run only the TCP server
-(HTTP/1.1 and HTTP/2) and disable the `Alt-Svc` HTTP/3 advertisement.
+HTTP/3 and TLS are enabled by default. Set `HTTP3_ENABLED=false` to run only a
+plain TCP HTTP/1.1 server without loading certificate files.
 
 Browsers discover HTTP/3 automatically:
 
