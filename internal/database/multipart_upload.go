@@ -3,7 +3,10 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type MultipartUpload struct {
@@ -22,8 +25,14 @@ type MultipartUploadPart struct {
 	PartNumber int
 	ETag       string
 	Size       int64
+	FileID     string
 	CreatedAt  time.Time
 }
+
+var (
+	ErrNoSuchUpload = errors.New("no such upload")
+	ErrPartsChanged = errors.New("parts changed during completion")
+)
 
 func (s *service) CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string) error {
 	inputMetaJSON, err := json.Marshal(customMeta)
@@ -72,20 +81,89 @@ func (s *service) GetMultipartUpload(ctx context.Context, uploadID string) (*Mul
 	return &mu, nil
 }
 
-func (s *service) SaveMultipartUploadPart(ctx context.Context, uploadID string, partNumber int, etag string, size int64) error {
+func (s *service) SaveMultipartUploadPart(ctx context.Context, uploadID string, partNumber int, etag string, size int64, fileID string) (*string, error) {
 	query := `
-		INSERT INTO multipart_upload_parts (upload_id, part_number, etag, size)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO multipart_upload_parts (upload_id, part_number, etag, size, file_id)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (upload_id, part_number) 
-		DO UPDATE SET etag = EXCLUDED.etag, size = EXCLUDED.size
+		DO UPDATE SET etag = EXCLUDED.etag, size = EXCLUDED.size, file_id = EXCLUDED.file_id
+		RETURNING (SELECT file_id FROM multipart_upload_parts
+                   WHERE upload_id = $1 AND part_number = $2)
 	`
-	_, err := s.db.Exec(ctx, query, uploadID, partNumber, etag, size)
-	return err
+
+	var oldFileID *string
+	err := s.db.QueryRow(ctx, query, uploadID, partNumber, etag, size, fileID).Scan(&oldFileID)
+	return oldFileID, err
+}
+
+func (s *service) CompleteMultipartUpload(ctx context.Context, uploadID string, used map[int]string,
+	o Object, segs []ObjectSegment) (oldFiles, unused []string, err error) {
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var one int
+	err = tx.QueryRow(ctx, `SELECT 1 FROM multipart_uploads WHERE upload_id = $1 FOR UPDATE`, uploadID).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, ErrNoSuchUpload
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// lock the part rows so a concurrent re-upload can't swap a file under us
+	rows, err := tx.Query(ctx,
+		`SELECT part_number, file_id FROM multipart_upload_parts WHERE upload_id = $1 FOR UPDATE`, uploadID)
+	if err != nil {
+		return nil, nil, err
+	}
+	seen := 0
+	for rows.Next() {
+		var pn int
+		var fid string
+		if err := rows.Scan(&pn, &fid); err != nil {
+			rows.Close()
+			return nil, nil, err
+		}
+		if want, ok := used[pn]; ok {
+			if want != fid {
+				rows.Close()
+				return nil, nil, ErrPartsChanged
+			}
+			seen++
+		} else {
+			unused = append(unused, fid)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	if seen != len(used) {
+		return nil, nil, ErrPartsChanged
+	}
+
+	oldFiles, err = replaceObjectTx(ctx, tx, o, segs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// cascades to the part rows; their files now back the object or are in `unused`
+	if _, err := tx.Exec(ctx, `DELETE FROM multipart_uploads WHERE upload_id = $1`, uploadID); err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, err
+	}
+	return oldFiles, unused, nil
 }
 
 func (s *service) ListMultipartUploadParts(ctx context.Context, uploadID string, partNumberMarker int, maxParts int) ([]MultipartUploadPart, error) {
 	query := `
-		SELECT part_number, etag, size, created_at
+		SELECT part_number, etag, size, file_id, created_at
 		FROM multipart_upload_parts
 		WHERE upload_id = $1 AND part_number > $2
 		ORDER BY part_number ASC
@@ -100,7 +178,7 @@ func (s *service) ListMultipartUploadParts(ctx context.Context, uploadID string,
 	var parts []MultipartUploadPart
 	for rows.Next() {
 		var part MultipartUploadPart
-		if err := rows.Scan(&part.PartNumber, &part.ETag, &part.Size, &part.CreatedAt); err != nil {
+		if err := rows.Scan(&part.PartNumber, &part.ETag, &part.Size, &part.FileID, &part.CreatedAt); err != nil {
 			return nil, err
 		}
 		parts = append(parts, part)
@@ -112,11 +190,16 @@ func (s *service) ListMultipartUploadParts(ctx context.Context, uploadID string,
 	return parts, nil
 }
 
-func (s *service) DeleteMultipartUpload(ctx context.Context, uploadID string) error {
-	query := `
-		DELETE FROM multipart_uploads
-		WHERE upload_id = $1
-	`
-	_, err := s.db.Exec(ctx, query, uploadID)
-	return err
+func (s *service) DeleteMultipartUpload(ctx context.Context, uploadID string) ([]string, error) {
+	rows, err := s.db.Query(ctx, `
+		WITH files AS (
+			SELECT file_id FROM multipart_upload_parts WHERE upload_id = $1
+		), del AS (
+			DELETE FROM multipart_uploads WHERE upload_id = $1
+		)
+		SELECT file_id FROM files`, uploadID)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }

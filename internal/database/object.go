@@ -29,62 +29,6 @@ type ListObjectsV2Result struct {
 	IsTruncated           bool
 }
 
-func (s *service) CreateObject(
-	ctx context.Context,
-	bucketId int,
-	objectId, objectKey string,
-	sizeBytes int64,
-	contentType, etag, contentDisp, contentLang string,
-	customMeta map[string]string,
-) (*Object, error) {
-	inputMetaJSON, err := json.Marshal(customMeta)
-	if err != nil {
-		return nil, err
-	}
-
-	query := `
-       INSERT INTO objects (
-           object_id, bucket_id, object_key, size_bytes, content_type, etag,
-           content_disposition, content_language, custom_metadata
-       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (bucket_id, object_key) DO UPDATE
-       SET size_bytes = EXCLUDED.size_bytes,
-           content_type = EXCLUDED.content_type,
-           etag = EXCLUDED.etag,
-           content_disposition = EXCLUDED.content_disposition,
-           content_language = EXCLUDED.content_language,
-           custom_metadata = EXCLUDED.custom_metadata,
-           created_at = CURRENT_TIMESTAMP,
-           object_id = EXCLUDED.object_id
-       RETURNING 
-           object_id, bucket_id, object_key, size_bytes, content_type, etag,
-           content_disposition, content_language, created_at
-    `
-	var obj Object
-	obj.CustomMetadata = customMeta
-
-	err = s.db.QueryRow(ctx, query,
-		objectId, bucketId, objectKey, sizeBytes, contentType, etag,
-		contentDisp, contentLang, inputMetaJSON,
-	).Scan(
-		&obj.ObjectId,
-		&obj.BucketId,
-		&obj.ObjectKey,
-		&obj.SizeBytes,
-		&obj.ContentType,
-		&obj.ETag,
-		&obj.ContentDisposition,
-		&obj.ContentLanguage,
-		&obj.CreatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	return &obj, nil
-}
-
 func (s *service) GetObject(ctx context.Context, objectId string) (*Object, error) {
 	var obj Object
 	var customMetaBytes []byte
@@ -229,8 +173,18 @@ func (s *service) ListObjectsV2(
 	}, nil
 }
 
-func (s *service) DeleteObject(ctx context.Context, bucketId int, objectKey string) error {
-	query := `DELETE FROM objects WHERE bucket_id = $1 AND object_key = $2`
-	_, err := s.db.Exec(ctx, query, bucketId, objectKey)
-	return err
+func (s *service) DeleteObject(ctx context.Context, bucketId int, objectKey string) ([]string, error) {
+	rows, err := s.db.Query(ctx, `
+		WITH files AS (
+			SELECT s.file_id
+			FROM objects o JOIN object_segments s ON s.object_id = o.object_id
+			WHERE o.bucket_id = $1 AND o.object_key = $2
+		), del AS (
+			DELETE FROM objects WHERE bucket_id = $1 AND object_key = $2
+		)
+		SELECT file_id FROM files`, bucketId, objectKey)
+	if err != nil {
+		return nil, err
+	}
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
