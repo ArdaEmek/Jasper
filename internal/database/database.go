@@ -46,7 +46,7 @@ type Service interface {
 	CompleteMultipartUpload(ctx context.Context, uploadID string, used map[int]string,
 		o Object, segs []ObjectSegment) (oldFiles, unused []string, err error)
 
-	CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string) error
+	CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string, isPublic bool) error
 	GetMultipartUpload(ctx context.Context, uploadID string) (*MultipartUpload, error)
 	SaveMultipartUploadPart(ctx context.Context, uploadID string, partNumber int, etag string, size int64, fileID string) (*string, error)
 	ListMultipartUploadParts(ctx context.Context, uploadID string, partNumberMarker int, maxParts int) ([]MultipartUploadPart, error)

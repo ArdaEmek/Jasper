@@ -19,6 +19,7 @@ type MultipartUpload struct {
 	ContentLanguage    *string
 	CustomMetadata     map[string]string
 	CreatedAt          time.Time
+	IsPublic           bool
 }
 
 type MultipartUploadPart struct {
@@ -34,7 +35,7 @@ var (
 	ErrPartsChanged = errors.New("parts changed during completion")
 )
 
-func (s *service) CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string) error {
+func (s *service) CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string, isPublic bool) error {
 	inputMetaJSON, err := json.Marshal(customMeta)
 	if err != nil {
 		return err
@@ -43,17 +44,17 @@ func (s *service) CreateMultipartUpload(ctx context.Context, uploadID, bucketNam
 	query := `
 		INSERT INTO multipart_uploads (
 			upload_id, bucket_name, object_key, user_id, 
-			content_type, content_disposition, content_language, custom_metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			content_type, content_disposition, content_language, custom_metadata, is_public
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 	`
-	_, err = s.db.Exec(ctx, query, uploadID, bucketName, objectKey, userID, contentType, contentDisp, contentLang, inputMetaJSON)
+	_, err = s.db.Exec(ctx, query, uploadID, bucketName, objectKey, userID, contentType, contentDisp, contentLang, inputMetaJSON, isPublic)
 	return err
 }
 
 func (s *service) GetMultipartUpload(ctx context.Context, uploadID string) (*MultipartUpload, error) {
 	query := `
 		SELECT upload_id, bucket_name, object_key, user_id, 
-		content_type, content_disposition, content_language, custom_metadata, created_at
+		content_type, content_disposition, content_language, custom_metadata, created_at, is_public
 		FROM multipart_uploads 
 		WHERE upload_id = $1
 	`
@@ -65,7 +66,7 @@ func (s *service) GetMultipartUpload(ctx context.Context, uploadID string) (*Mul
 	err := row.Scan(
 		&mu.UploadID, &mu.BucketName, &mu.ObjectKey, &mu.UserID,
 		&mu.ContentType, &mu.ContentDisposition, &mu.ContentLanguage,
-		&customMetaJSON, &mu.CreatedAt,
+		&customMetaJSON, &mu.CreatedAt, &mu.IsPublic,
 	)
 	if err != nil {
 		return nil, err

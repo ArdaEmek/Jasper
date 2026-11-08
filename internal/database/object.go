@@ -20,6 +20,7 @@ type Object struct {
 	CustomMetadata     map[string]string
 	ETag               string
 	CreatedAt          time.Time
+	IsPublic           bool
 }
 
 type ListObjectsV2Result struct {
@@ -34,7 +35,7 @@ func (s *service) GetObject(ctx context.Context, objectId string) (*Object, erro
 	var customMetaBytes []byte
 
 	query := `
-		SELECT object_id, bucket_id, object_key, size_bytes, content_type, etag, content_disposition, content_language, custom_metadata, created_at
+		SELECT object_id, bucket_id, object_key, size_bytes, content_type, etag, content_disposition, content_language, custom_metadata, created_at, is_public
 		FROM objects
 		WHERE object_id = $1
 	`
@@ -50,6 +51,7 @@ func (s *service) GetObject(ctx context.Context, objectId string) (*Object, erro
 		&obj.ContentLanguage,
 		&customMetaBytes,
 		&obj.CreatedAt,
+		&obj.IsPublic,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -70,7 +72,7 @@ func (s *service) GetObjectByKey(ctx context.Context, bucketId int, objectKey st
 	var customMetaBytes []byte
 
 	query := `
-		SELECT object_id, bucket_id, object_key, size_bytes, content_type, etag, content_disposition, content_language, custom_metadata, created_at
+		SELECT object_id, bucket_id, object_key, size_bytes, content_type, etag, content_disposition, content_language, custom_metadata, created_at, is_public
 		FROM objects
 		WHERE bucket_id = $1 AND object_key = $2
 	`
@@ -86,6 +88,7 @@ func (s *service) GetObjectByKey(ctx context.Context, bucketId int, objectKey st
 		&obj.ContentLanguage,
 		&customMetaBytes,
 		&obj.CreatedAt,
+		&obj.IsPublic,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -117,7 +120,7 @@ func (s *service) ListObjectsV2(
 	// Fetch maxKeys + 1 items to check for truncation
 	query := `
 		SELECT object_id, bucket_id, object_key, size_bytes, content_type, etag, 
-		       content_disposition, content_language, created_at
+		       content_disposition, content_language, created_at, is_public
 		FROM objects
 		WHERE bucket_id = $1
 		  AND ($2 = '' OR object_key LIKE $2 || '%')
@@ -145,6 +148,7 @@ func (s *service) ListObjectsV2(
 			&obj.ContentDisposition,
 			&obj.ContentLanguage,
 			&obj.CreatedAt,
+			&obj.IsPublic,
 		)
 		if err != nil {
 			return nil, err

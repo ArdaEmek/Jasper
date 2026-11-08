@@ -82,10 +82,10 @@ func replaceObjectTx(ctx context.Context, tx pgx.Tx, o Object, segs []ObjectSegm
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO objects (object_id, bucket_id, object_key, size_bytes, etag,
-		                     content_type, content_disposition, content_language, custom_metadata)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+                     content_type, content_disposition, content_language, custom_metadata, is_public)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 		o.ObjectId, o.BucketId, o.ObjectKey, o.SizeBytes, o.ETag,
-		o.ContentType, o.ContentDisposition, o.ContentLanguage, metaJSON); err != nil {
+		o.ContentType, o.ContentDisposition, o.ContentLanguage, metaJSON, o.IsPublic); err != nil {
 		return nil, err
 	}
 
