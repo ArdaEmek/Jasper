@@ -15,16 +15,6 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 	bucket, _ := r.Context().Value("bucket").(*database.Bucket)
 	apiKey, _ := r.Context().Value("apiKey").(*database.ApiKey)
 
-	if apiKey.PermissionLevel == "write_only" {
-		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "AccessDenied",
-			Message:   "The provided API key has write-only permissions and cannot get resources.",
-			RequestId: reqID,
-			Resource:  r.URL.Path,
-		})
-		return
-	}
-
 	key := r.PathValue("key")
 	if key == "" {
 		utils.S3ErrorResponse(w, utils.S3Error{
@@ -48,10 +38,30 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if apiKey == nil && (objectData == nil || !objectData.IsPublic) {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "AccessDenied",
+			Message:   "Access Denied",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
 	if objectData == nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "NoSuchKey",
 			Message:   "The specified key does not exist.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	if apiKey != nil && apiKey.PermissionLevel == "write_only" {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "AccessDenied",
+			Message:   "Access Denied",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -72,6 +82,14 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if !objectData.CreatedAt.IsZero() {
 		w.Header().Set("Last-Modified", objectData.CreatedAt.UTC().Format(http.TimeFormat))
+	}
+
+	if apiKey == nil {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	} else {
+		w.Header().Set("Cache-Control", "private, no-store")
 	}
 
 	w.Header().Set("x-amz-checksum-algorithm", "MD5")
