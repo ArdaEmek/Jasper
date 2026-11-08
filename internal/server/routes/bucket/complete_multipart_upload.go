@@ -4,8 +4,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/xml"
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"s3/internal/database"
@@ -26,7 +26,8 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 
 	// Parse XML Payload
 	var completeReq utils.CompleteMultipartUploadRequest
-	decoder := xml.NewDecoder(r.Body)
+	body := http.MaxBytesReader(w, r.Body, 2<<20) // 2MB
+	decoder := xml.NewDecoder(body)
 	if err := decoder.Decode(&completeReq); err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "MalformedXML",
@@ -70,7 +71,7 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	dbPartsMap := make(map[int]database.MultipartUploadPart)
+	dbPartsMap := make(map[int]database.MultipartUploadPart, len(dbParts))
 	for _, p := range dbParts {
 		dbPartsMap[p.PartNumber] = p
 	}
@@ -78,6 +79,16 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 	// Validate parts
 	var totalSize int64
 	for i, reqPart := range completeReq.Parts {
+		if i > 0 && reqPart.PartNumber <= completeReq.Parts[i-1].PartNumber {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "InvalidPartOrder",
+				Message:   "The list of parts was not in ascending order. The parts list must be specified in order by part number.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+
 		dbPart, exists := dbPartsMap[reqPart.PartNumber]
 		if !exists {
 			utils.S3ErrorResponse(w, utils.S3Error{
@@ -131,34 +142,19 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	newObjectID := ksuid.New().String()
-	finalFile, err := fs.WriteFile(newObjectID)
-	if err != nil {
-		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "InternalError",
-			Message:   "An internal error occurred. Try again.",
-			RequestId: reqID,
-			Resource:  r.URL.Path,
-		})
-		return
-	}
-
-	// Putting the parts together
-	// ! TEMPORARY, SUBJECT TO CHANGE
+	segs := make([]database.ObjectSegment, 0, len(completeReq.Parts))
+	used := make(map[int]string, len(completeReq.Parts))
 	hash := md5.New()
-	for _, reqPart := range completeReq.Parts {
-		partFileName := fmt.Sprintf("%s_%d", uploadID, reqPart.PartNumber)
+	var start int64
+	for _, rp := range completeReq.Parts {
+		p := dbPartsMap[rp.PartNumber]
+		segs = append(segs, database.ObjectSegment{FileID: p.FileID, Size: p.Size, Start: start})
+		used[p.PartNumber] = p.FileID
+		start += p.Size
 
-		// Decode string ETag
-		rawPartHash, _ := hex.DecodeString(dbPartsMap[reqPart.PartNumber].ETag)
-		hash.Write(rawPartHash)
-
-		// Read part and write it to object
-		partFile, err := fs.ReadFile(partFileName)
+		raw, err := hex.DecodeString(p.ETag)
 		if err != nil {
-			_ = finalFile.Close()
-			_ = fs.DeleteFile(newObjectID)
-			log.Printf("Error reading part file %s: %v", partFileName, err)
+			log.Printf("bad stored etag for part %d: %v", p.PartNumber, err)
 			utils.S3ErrorResponse(w, utils.S3Error{
 				Code:      "InternalError",
 				Message:   "An internal error occurred. Try again.",
@@ -167,53 +163,53 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 			})
 			return
 		}
-
-		_, err = io.Copy(finalFile.File, partFile.File) // Passing *os.File directly to use syscall copy_file_range, bypassing buffering completely
-		_ = partFile.Close()
-		if err != nil {
-			_ = finalFile.Close()
-			_ = fs.DeleteFile(newObjectID)
-			utils.S3ErrorResponse(w, utils.S3Error{
-				Code:      "InternalError",
-				Message:   "An internal error occurred. Try again.",
-				RequestId: reqID,
-				Resource:  r.URL.Path,
-			})
-			return
-		}
+		hash.Write(raw)
 	}
-	_ = finalFile.Close()
 
 	finalEtag := fmt.Sprintf("%s-%d", hex.EncodeToString(hash.Sum(nil)), len(completeReq.Parts))
-
-	contentDisp := ""
+	contentType := "application/octet-stream"
+	if mu.ContentType != nil && *mu.ContentType != "" {
+		contentType = *mu.ContentType
+	}
+	contentDisp, contentLang := "", ""
 	if mu.ContentDisposition != nil {
 		contentDisp = *mu.ContentDisposition
 	}
-	contentLang := ""
 	if mu.ContentLanguage != nil {
 		contentLang = *mu.ContentLanguage
 	}
-	contentType := "application/octet-stream"
-	if mu.ContentType != nil {
-		contentType = *mu.ContentType
-	}
 
-	_, err = h.db.CreateObject(
-		r.Context(),
-		bucket.Id,
-		newObjectID,
-		key,
-		totalSize,
-		contentType,
-		finalEtag,
-		contentDisp,
-		contentLang,
-		mu.CustomMetadata,
-	)
+	replacedFiles, unused, err := h.db.CompleteMultipartUpload(r.Context(), uploadID, used, database.Object{
+		ObjectId:           ksuid.New().String(),
+		BucketId:           bucket.Id,
+		ObjectKey:          key,
+		SizeBytes:          totalSize,
+		ContentType:        contentType,
+		ContentDisposition: contentDisp,
+		ContentLanguage:    contentLang,
+		CustomMetadata:     mu.CustomMetadata,
+		ETag:               finalEtag,
+	}, segs)
 
-	if err != nil {
-		_ = fs.DeleteFile(newObjectID)
+	switch {
+	case errors.Is(err, database.ErrNoSuchUpload):
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "NoSuchUpload",
+			Message:   "The specified multipart upload does not exist. The upload ID might not be valid, or the multipart upload might have been aborted or completed.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	case errors.Is(err, database.ErrPartsChanged):
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "InvalidPart",
+			Message:   "One or more of the specified parts could not be found.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	case err != nil:
+		log.Printf("complete multipart upload: %v", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
 			Message:   "An internal error occurred. Try again.",
@@ -223,10 +219,11 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 		return
 	}
 
-	// Delete old parts
-	_ = h.db.DeleteMultipartUpload(r.Context(), uploadID)
-	for _, reqPart := range completeReq.Parts {
-		_ = fs.DeleteFile(fmt.Sprintf("%s_%d", uploadID, reqPart.PartNumber))
+	if err := fs.DeleteFiles(replacedFiles); err != nil {
+		log.Printf("cleanup of replaced files: %v", err)
+	}
+	if err := fs.DeleteFiles(unused); err != nil {
+		log.Printf("cleanup of unused files: %v", err)
 	}
 
 	locationURL := fmt.Sprintf("http://%s/%s/%s", r.Host, bucket.Name, key)

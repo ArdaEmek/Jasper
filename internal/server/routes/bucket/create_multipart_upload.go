@@ -46,10 +46,12 @@ func (h *Handler) createMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 
 	customMetadata := make(map[string]string)
 	customMetadataSize := 0
+	const metaPrefix = "X-Amz-Meta-"
 	for key, val := range r.Header {
-		if strings.HasPrefix(key, "X-Amz-Meta-") && len(val) > 0 {
-			customMetadata[key] = val[0]
-			customMetadataSize += len(key) + len(val[0])
+		if strings.HasPrefix(key, metaPrefix) && len(val) > 0 {
+			k := strings.ToLower(key[len(metaPrefix):])
+			customMetadata[k] = val[0]
+			customMetadataSize += len(k) + len(val[0])
 		}
 	}
 
@@ -57,6 +59,16 @@ func (h *Handler) createMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "MetadataTooLarge",
 			Message:   "Your user metadata exceeds the maximum allowed size (2 KB)",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	if len(key) > 1024 {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "KeyTooLongError",
+			Message:   "Your key is too long.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
