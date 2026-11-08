@@ -44,6 +44,26 @@ func (h *Handler) createMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	isPublic := false
+	acl := r.Header.Get("X-Amz-Acl")
+	if acl == "" {
+		acl = r.URL.Query().Get("x-amz-acl")
+	}
+
+	switch acl {
+	case "", "private":
+	case "public-read":
+		isPublic = true
+	default:
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "NotImplemented",
+			Message:   "Only the private and public-read ACLs are supported",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
 	customMetadata := make(map[string]string)
 	customMetadataSize := 0
 	const metaPrefix = "X-Amz-Meta-"
@@ -86,6 +106,7 @@ func (h *Handler) createMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		contentDisposition,
 		contentLanguage,
 		customMetadata,
+		isPublic,
 	)
 	if err != nil {
 		log.Printf("Failed to create multipart upload DB entry: %v", err)
