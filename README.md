@@ -7,6 +7,8 @@ A lightweight, S3-compatible cloud storage server written in Go. Self-host your 
 - **HTTP/3 (QUIC) + HTTP/2 + HTTP/1.1** — dual-stack server with automatic protocol upgrade via `Alt-Svc`
 - S3-compatible REST API
 - Bucket & object management
+- **Public and private objects** — objects are private by default; `x-amz-acl: public-read` makes an object readable without credentials
+- **Instant multipart completion** — parts are kept as separate files and served as one logical object (no data copying)
 - PostgreSQL-backed metadata storage
 - TLS 1.3 enforced
 - Token-based admin authentication
@@ -165,7 +167,7 @@ Admin endpoints require the `ADMIN_ENDPOINT_KEY` in the `Authorization` header.
 | `GET`  | `/admin/apikey`  | Get all API keys for user (requires JSON body: `{"id": 1}`) |
 
 ### S3-Compatible Endpoints
-S3 endpoints require AWS Signature V4 authentication via `Authorization` header or presigned URLs.
+S3 endpoints require AWS Signature V4 authentication via `Authorization` header or presigned URLs. The one exception is reading a public object (see [Public Objects](#public-objects)).
 
 <details>
 <summary><strong>Bucket Operations</strong></summary>
@@ -184,9 +186,9 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 
 | Method | Endpoint            | Description                               |
 |--------|---------------------|-------------------------------------------|
-| `PUT`    | `/{bucket}/{key}` | Upload/overwrite an object |
-| `GET`    | `/{bucket}/{key}` | Retrieve object (supports `Range` requests) |
-| `HEAD`   | `/{bucket}/{key}` | Get object metadata without downloading |
+| `PUT`    | `/{bucket}/{key}` | Upload/overwrite an object (optional `x-amz-acl: public-read`) |
+| `GET`    | `/{bucket}/{key}` | Retrieve object (supports `Range` requests; anonymous if the object is public) |
+| `HEAD`   | `/{bucket}/{key}` | Get object metadata without downloading (anonymous if the object is public) |
 | `DELETE` | `/{bucket}/{key}` | Delete an object |
 
 </details>
@@ -194,11 +196,11 @@ S3 endpoints require AWS Signature V4 authentication via `Authorization` header 
 <details>
 <summary><strong>Multipart Uploads</strong></summary>
 
-> **Note:** Completing a multipart upload currently merges all parts into a single physical file on disk (no virtual stitching). This behavior may change in future releases.
+> **Note:** Completing a multipart upload does not copy any data. Each uploaded part stays on disk as its own file, and the object is stored as an ordered list of segments that is read back as one continuous object. Completion time therefore does not depend on object size, and range requests that cross part boundaries are supported.
 
 | Method | Endpoint                                       | Description                     |
 |--------|------------------------------------------------|---------------------------------|
-| `POST` | `/{bucket}/{key}?uploads`                  | Create a multipart upload |
+| `POST` | `/{bucket}/{key}?uploads`                  | Create a multipart upload (optional `x-amz-acl: public-read`) |
 | `PUT`  | `/{bucket}/{key}?partNumber=n&uploadId=id` | Upload a part |
 | `POST` | `/{bucket}/{key}?uploadId=id`              | Complete a multipart upload |
 | `GET`  | `/{bucket}/{key}?uploadId=id`              | List parts of a multipart upload |
@@ -212,9 +214,28 @@ GET requests support the standard HTTP `Range` header for partial downloads:
 ```
 Range: bytes=0-1023     # First 1024 bytes
 Range: bytes=500-       # From byte 500 to end
+Range: bytes=-500       # Last 500 bytes
 ```
 
-The server responds with `206 Partial Content` and the appropriate `Content-Range` header.
+The server responds with `206 Partial Content` and the appropriate `Content-Range` header. A single range is supported; malformed or multi-range headers are ignored and the full object is returned.
+
+## Public Objects
+
+Objects are **private by default**. To make an object publicly readable, upload it with the standard `x-amz-acl: public-read` header (or `ACL: "public-read"` in an SDK). `private` is also accepted; any other ACL value returns `NotImplemented`.
+
+```bash
+aws s3 cp photo.jpg s3://my-bucket/photo.jpg --acl public-read --endpoint-url https://localhost:8080
+```
+
+For multipart uploads, set the ACL on `CreateMultipartUpload`; the finished object inherits it.
+
+How public access behaves:
+
+- **Anonymous access covers `GET` and `HEAD` of a single object only.** Listing, uploading, deleting, and every other operation still require a signed request.
+- **Private and missing keys look the same.** An anonymous request for a private object or for a key that doesn't exist returns `AccessDenied`, so keys can't be probed.
+- **Overwriting resets visibility.** Uploading over a public key without `public-read` makes it private again, as in S3.
+- **Headers on anonymous responses:** `Cache-Control: public, max-age=300`, `X-Content-Type-Options: nosniff`, and `Content-Security-Policy: sandbox`, so uploaded HTML and SVG can't run scripts with your server's privileges. Authenticated responses use `Cache-Control: private, no-store`.
+- Changing visibility of an existing object (`PutObjectAcl`) is not implemented yet; re-upload the object with the desired ACL.
 
 ## Supported S3 Operations
 
@@ -226,15 +247,15 @@ The server responds with `206 Partial Content` and the appropriate `Content-Rang
 | ListBuckets | ✅ | Supported                              |
 | GetBucketLocation | ❌ | Multi-location is not supported        |
 | **Object Operations** | |                                        |
-| PutObject | ✅ | Supported                              |
-| GetObject | ✅ | Supported                              |
-| HeadObject | ✅ | Supported                              |
+| PutObject | ✅ | Supported (`private` and `public-read` ACLs) |
+| GetObject | ✅ | Supported (anonymous for public objects) |
+| HeadObject | ✅ | Supported (anonymous for public objects) |
 | DeleteObject | ✅ | Supported (Multiple objects supported) |
 | CopyObject | ❌ | Not yet implemented                    |
 | **Multipart Upload** | |                                        |
-| CreateMultipartUpload | ✅ | Supported                              |
+| CreateMultipartUpload | ✅ | Supported (`private` and `public-read` ACLs) |
 | UploadPart | ✅ | Supported                              |
-| CompleteMultipartUpload | ✅ | Supported (Zero-copy Linux optimized)  |
+| CompleteMultipartUpload | ✅ | Supported (no data copy; parts are stored as segments) |
 | ListParts | ✅ | Supported                              |
 | AbortMultipartUpload | ✅ | Supported                              |
 | **Object Listing** | |                                        |
@@ -259,9 +280,19 @@ aws s3 mb s3://my-bucket --endpoint-url https://localhost:8080
 aws s3 cp myfile.txt s3://my-bucket/myfile.txt --endpoint-url https://localhost:8080
 ```
 
+### Uploading a Public Object
+```bash
+aws s3 cp myfile.txt s3://my-bucket/myfile.txt --acl public-read --endpoint-url https://localhost:8080
+```
+
 ### Downloading an Object
 ```bash
 aws s3 cp s3://my-bucket/myfile.txt ./myfile.txt --endpoint-url https://localhost:8080
+```
+
+### Downloading a Public Object Without Credentials
+```bash
+curl https://localhost:8080/my-bucket/myfile.txt
 ```
 
 ### Getting Object Metadata (HEAD)
