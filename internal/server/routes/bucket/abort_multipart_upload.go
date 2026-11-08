@@ -1,7 +1,6 @@
 package bucket
 
 import (
-	"fmt"
 	"log"
 	"net/http"
 	"s3/internal/database"
@@ -62,7 +61,7 @@ func (h *Handler) abortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	err = h.db.DeleteMultipartUpload(r.Context(), uploadID)
+	_, err = h.db.DeleteMultipartUpload(r.Context(), uploadID)
 	if err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -75,11 +74,13 @@ func (h *Handler) abortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 
 	// Deleting parts
 	fs := filesystem.GetInstance()
-	for _, part := range dbParts {
-		partFileName := fmt.Sprintf("%s_%d", uploadID, part.PartNumber)
-		if err := fs.DeleteFile(partFileName); err != nil {
-			log.Printf("Warning: failed to delete part file %s on abort: %v", partFileName, err)
-		}
+	ids := make([]string, len(dbParts))
+	for i, p := range dbParts {
+		ids[i] = p.FileID
+	}
+
+	if err := fs.DeleteFiles(ids); err != nil {
+		log.Printf("cleanup of aborted upload %s: %v", uploadID, err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
