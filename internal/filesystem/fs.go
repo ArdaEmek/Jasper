@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -17,33 +18,34 @@ type FileManager interface {
 	GetFile(fileName string) (*os.File, error)
 	IsExist(fileName string) (bool, error)
 	DeleteFile(fileName string) error
+	DeleteFiles(fileNames []string) error
 	GetFileInfo(fileName string) (os.FileInfo, error)
 	ReadFile(fileName string) (*FileReader, error)
 	WriteFile(fileName string) (*FileWriter, error)
+	NewSegmentedReader(segs []Segment) *SegmentedReader
+	ParseRange(h string, size int64) (start, end int64, ok bool)
 }
 
 var (
-	fmInstance *fileManager = nil
+	fmInstance FileManager
+	initErr    error
 	once       sync.Once
 )
 
 func New(path string) (FileManager, error) {
-	if path == "" {
-		path = "./data"
-	}
-
-	if err := os.MkdirAll(path, 0750); err != nil {
-		return nil, fmt.Errorf("create storage directory %q: %w", path, err)
-	}
-
 	once.Do(func() {
-		fmInstance = &fileManager{
-			workingDir: path,
+		if path == "" {
+			path = "./data"
 		}
+		if err := os.MkdirAll(path, 0750); err != nil {
+			initErr = fmt.Errorf("create storage directory %q: %w", path, err)
+			return
+		}
+		fmInstance = &fileManager{workingDir: path}
+		log.Printf("Storage initialized at %s.", path)
 	})
 
-	log.Printf("Storage initialized at %s.", path)
-	return fmInstance, nil
+	return fmInstance, initErr
 }
 
 func GetInstance() FileManager {
@@ -88,12 +90,24 @@ func (fm *fileManager) IsExist(fileName string) (bool, error) {
 }
 
 func (fm *fileManager) DeleteFile(fileName string) error {
+	if fileName == "" {
+		return errors.New("empty file name")
+	}
 	path, err := fm.joinPath(fileName)
 	if err != nil {
 		return err
 	}
-
 	return os.Remove(path)
+}
+
+func (fm *fileManager) DeleteFiles(fileNames []string) error {
+	var errs []error
+	for _, name := range fileNames {
+		if err := fm.DeleteFile(name); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, fmt.Errorf("delete %s: %w", name, err))
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (fm *fileManager) GetFileInfo(fileName string) (os.FileInfo, error) {

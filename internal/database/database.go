@@ -36,22 +36,21 @@ type Service interface {
 	ListBucketsByOwnerId(ctx context.Context, ownerId int) ([]Bucket, error)
 	IsBucketEmpty(ctx context.Context, bucketId int, bucketName string) (bool, error)
 
-	// CreateObject registers a newly uploaded file (object) in the database under the specified bucket.
-	// It stores the object's metadata, sizing, and custom headers. Returns the created Object.
-	CreateObject(ctx context.Context, bucketId int, objectId, objectKey string, sizeBytes int64,
-		contentType, etag, contentDisp, contentLang string,
-		customMeta map[string]string,
-	) (*Object, error)
 	GetObjectByKey(ctx context.Context, bucketId int, objectKey string) (*Object, error)
 	GetObject(ctx context.Context, objectId string) (*Object, error)
 	ListObjectsV2(ctx context.Context, bucketId int, prefix string, continuationToken string, startAfter string, maxKeys int) (*ListObjectsV2Result, error)
-	DeleteObject(ctx context.Context, bucketId int, objectKey string) error
+	DeleteObject(ctx context.Context, bucketId int, objectKey string) ([]string, error)
 
-	CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string) error
+	GetObjectSegments(ctx context.Context, objectID string) ([]ObjectSegment, error)
+	ReplaceObject(ctx context.Context, o Object, segs []ObjectSegment) ([]string, error)
+	CompleteMultipartUpload(ctx context.Context, uploadID string, used map[int]string,
+		o Object, segs []ObjectSegment) (oldFiles, unused []string, err error)
+
+	CreateMultipartUpload(ctx context.Context, uploadID, bucketName, objectKey string, userID int, contentType, contentDisp, contentLang string, customMeta map[string]string, isPublic bool) error
 	GetMultipartUpload(ctx context.Context, uploadID string) (*MultipartUpload, error)
-	SaveMultipartUploadPart(ctx context.Context, uploadID string, partNumber int, etag string, size int64) error
+	SaveMultipartUploadPart(ctx context.Context, uploadID string, partNumber int, etag string, size int64, fileID string) (*string, error)
 	ListMultipartUploadParts(ctx context.Context, uploadID string, partNumberMarker int, maxParts int) ([]MultipartUploadPart, error)
-	DeleteMultipartUpload(ctx context.Context, uploadID string) error
+	DeleteMultipartUpload(ctx context.Context, uploadID string) ([]string, error)
 
 	// ValidatePresignedUrl verifies an S3-compatible presigned URL's expiration and constraints.
 	// Returns the authenticated User and their ApiKey, or an AuthError if validation fails.

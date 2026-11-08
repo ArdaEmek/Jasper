@@ -44,12 +44,34 @@ func (h *Handler) createMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	isPublic := false
+	acl := r.Header.Get("X-Amz-Acl")
+	if acl == "" {
+		acl = r.URL.Query().Get("x-amz-acl")
+	}
+
+	switch acl {
+	case "", "private":
+	case "public-read":
+		isPublic = true
+	default:
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "NotImplemented",
+			Message:   "Only the private and public-read ACLs are supported",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
 	customMetadata := make(map[string]string)
 	customMetadataSize := 0
+	const metaPrefix = "X-Amz-Meta-"
 	for key, val := range r.Header {
-		if strings.HasPrefix(key, "X-Amz-Meta-") && len(val) > 0 {
-			customMetadata[key] = val[0]
-			customMetadataSize += len(key) + len(val[0])
+		if strings.HasPrefix(key, metaPrefix) && len(val) > 0 {
+			k := strings.ToLower(key[len(metaPrefix):])
+			customMetadata[k] = val[0]
+			customMetadataSize += len(k) + len(val[0])
 		}
 	}
 
@@ -57,6 +79,16 @@ func (h *Handler) createMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "MetadataTooLarge",
 			Message:   "Your user metadata exceeds the maximum allowed size (2 KB)",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	if len(key) > 1024 {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "KeyTooLongError",
+			Message:   "Your key is too long.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -74,6 +106,7 @@ func (h *Handler) createMultipartUploadHandler(w http.ResponseWriter, r *http.Re
 		contentDisposition,
 		contentLanguage,
 		customMetadata,
+		isPublic,
 	)
 	if err != nil {
 		log.Printf("Failed to create multipart upload DB entry: %v", err)

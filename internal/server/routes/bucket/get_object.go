@@ -2,7 +2,6 @@ package bucket
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"s3/internal/database"
@@ -15,16 +14,6 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 	reqID, _ := r.Context().Value("requestID").(string)
 	bucket, _ := r.Context().Value("bucket").(*database.Bucket)
 	apiKey, _ := r.Context().Value("apiKey").(*database.ApiKey)
-
-	if apiKey.PermissionLevel == "write_only" {
-		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "AccessDenied",
-			Message:   "The provided API key has write-only permissions and cannot get resources.",
-			RequestId: reqID,
-			Resource:  r.URL.Path,
-		})
-		return
-	}
 
 	key := r.PathValue("key")
 	if key == "" {
@@ -49,10 +38,30 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if apiKey == nil && (objectData == nil || !objectData.IsPublic) {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "AccessDenied",
+			Message:   "Access Denied",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
 	if objectData == nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "NoSuchKey",
 			Message:   "The specified key does not exist.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	if apiKey != nil && apiKey.PermissionLevel == "write_only" {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "AccessDenied",
+			Message:   "Access Denied",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -73,6 +82,14 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if !objectData.CreatedAt.IsZero() {
 		w.Header().Set("Last-Modified", objectData.CreatedAt.UTC().Format(http.TimeFormat))
+	}
+
+	if apiKey == nil {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Security-Policy", "sandbox")
+	} else {
+		w.Header().Set("Cache-Control", "private, no-store")
 	}
 
 	w.Header().Set("x-amz-checksum-algorithm", "MD5")
@@ -101,9 +118,9 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fr, err := fs.ReadFile(objectData.ObjectId)
+	dbSegs, err := h.db.GetObjectSegments(r.Context(), objectData.ObjectId)
 	if err != nil {
-		log.Printf("Filesystem error retrieving object file %s: %v", objectData.ObjectId, err)
+		log.Printf("Database error retrieving segments for %s: %v", objectData.ObjectId, err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
 			Message:   "An internal error occurred. Try again.",
@@ -112,56 +129,50 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	defer fr.Close()
 
-	start, end := int64(0), objectData.SizeBytes-1
-	isRange := false
+	segs := make([]filesystem.Segment, len(dbSegs))
+	for i, s := range dbSegs {
+		segs[i] = filesystem.Segment{FileID: s.FileID, Size: s.Size, Start: s.Start}
+	}
+	sr := fs.NewSegmentedReader(segs)
+
+	size := objectData.SizeBytes
+	if sr.Size() != size {
+		log.Printf("segment size mismatch for %s: segments=%d object=%d", objectData.ObjectId, sr.Size(), size)
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "InternalError",
+			Message:   "An internal error occurred. Try again.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	start, length := int64(0), size
+	status := http.StatusOK
 
 	if rangeHeader := r.Header.Get("Range"); rangeHeader != "" {
-		n, err := fmt.Sscanf(rangeHeader, "bytes=%d-%d", &start, &end)
-		if err == nil || n > 0 {
-			if n == 1 {
-				end = objectData.SizeBytes - 1
-			}
-
-			if start < 0 || start >= objectData.SizeBytes || start > end {
-				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", objectData.SizeBytes))
+		if s, e, ok := fs.ParseRange(rangeHeader, size); ok {
+			if s >= size {
+				w.Header().Set("Content-Range", fmt.Sprintf("bytes */%d", size))
 				utils.S3ErrorResponse(w, utils.S3Error{
 					Code:      "InvalidRange",
-					Message:   "The requested range cannot be satisfied.",
+					Message:   "The requested range is not satisfiable",
 					RequestId: reqID,
 					Resource:  r.URL.Path,
 				})
 				return
 			}
-
-			if end >= objectData.SizeBytes {
-				end = objectData.SizeBytes - 1
-			}
-			isRange = true
+			start, length = s, e-s+1
+			status = http.StatusPartialContent
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", s, e, size))
 		}
 	}
 
-	if isRange {
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, objectData.SizeBytes))
-		w.Header().Set("Content-Length", strconv.FormatInt(end-start+1, 10))
-		w.WriteHeader(http.StatusPartialContent)
+	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+	w.WriteHeader(status)
 
-		if _, err := fr.File.Seek(start, io.SeekStart); err != nil {
-			log.Printf("Failed to seek file: %v", err)
-		}
-
-		limitedReader := io.LimitReader(fr, end-start+1)
-		if _, err := io.Copy(w, limitedReader); err != nil {
-			log.Printf("Error streaming partial file %s to client: %v", objectData.ObjectId, err)
-		}
-	} else {
-		w.Header().Set("Content-Length", strconv.FormatInt(objectData.SizeBytes, 10))
-		w.WriteHeader(http.StatusOK)
-
-		limitedReader := io.LimitReader(fr, objectData.SizeBytes)
-		if _, err := io.Copy(w, limitedReader); err != nil {
-			log.Printf("Error streaming file %s to client: %v", objectData.ObjectId, err)
-		}
+	if err := sr.WriteRange(w, start, length); err != nil {
+		log.Printf("Error streaming %s to client: %v", objectData.ObjectId, err)
 	}
 }

@@ -57,6 +57,7 @@ var s3StatusMap = map[string]int{
 	"InvalidBucketName":       http.StatusBadRequest,
 	"InvalidArgument":         http.StatusBadRequest,
 	"InvalidDigest":           http.StatusBadRequest, // Checksum mismatch
+	"BadDigest":               http.StatusBadRequest, // Checksum mismatch
 	"BucketAlreadyExists":     http.StatusBadRequest, // Global name conflict
 	"BucketAlreadyOwnedByYou": http.StatusBadRequest,
 	"EntityTooLarge":          http.StatusBadRequest, // File exceeds max size
@@ -65,6 +66,7 @@ var s3StatusMap = map[string]int{
 	"InvalidURI":              http.StatusBadRequest,
 	"MetadataTooLarge":        http.StatusBadRequest,
 	"KeyTooLongError":         http.StatusBadRequest,
+	"InvalidPartOrder":        http.StatusBadRequest,
 
 	// 409 - Conflict
 	"BucketNotEmpty": http.StatusConflict,

@@ -1,6 +1,7 @@
 package bucket
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
@@ -14,6 +15,7 @@ import (
 	"strconv"
 
 	"github.com/klauspost/crc32"
+	"github.com/segmentio/ksuid"
 )
 
 func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
@@ -69,8 +71,8 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	partFileName := fmt.Sprintf("%s_%d", uploadID, partNumber)
-	fw, err := fs.WriteFile(partFileName)
+	partID := ksuid.New().String()
+	fw, err := fs.WriteFile(partID)
 	if err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -80,16 +82,14 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	defer fw.Close()
+	defer fw.Abort()
 
 	hash := md5.New()
 	CRC32Hash := crc32.NewIEEE()
-	multiWriter := io.MultiWriter(fw.Writer, hash, CRC32Hash)
+	multiWriter := io.MultiWriter(fw, hash, CRC32Hash)
 
 	sizeBytes, err := io.Copy(multiWriter, r.Body)
 	if err != nil {
-		fw.Close()
-		_ = fs.DeleteFile(partFileName)
 		log.Printf("Error writing file: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -100,26 +100,63 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fw.Close()
-	etag := hex.EncodeToString(hash.Sum(nil))
-
-	serverCRC32 := base64.StdEncoding.EncodeToString(CRC32Hash.Sum(nil))
-	clientCRC32 := query.Get("x-amz-checksum-crc32")
-	if clientCRC32 != "" && clientCRC32 != serverCRC32 {
-		_ = fs.DeleteFile(partFileName)
-		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
+	if err := fw.Close(); err != nil {
+		log.Printf("Error closing file: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "InvalidDigest",
-			Message:   "The Content-MD5 or checksum value that you specified is not valid.",
+			Code:      "InternalError",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
 		return
 	}
 
-	err = h.db.SaveMultipartUploadPart(r.Context(), uploadID, partNumber, etag, sizeBytes)
+	etag := hex.EncodeToString(hash.Sum(nil))
+	if md5Header := r.Header.Get("Content-MD5"); md5Header != "" {
+		clientMD5, err := base64.StdEncoding.DecodeString(md5Header)
+		if err != nil || len(clientMD5) != md5.Size {
+			_ = fs.DeleteFile(partID)
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "InvalidDigest",
+				Message:   "The Content-MD5 or checksum value that you specified is not valid.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+		if !bytes.Equal(clientMD5, hash.Sum(nil)) {
+			_ = fs.DeleteFile(partID)
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "BadDigest",
+				Message:   "The Content-MD5 you specified did not match what we received.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+	}
+
+	serverCRC32 := base64.StdEncoding.EncodeToString(CRC32Hash.Sum(nil))
+	clientCRC32 := r.Header.Get("X-Amz-Checksum-Crc32")
+	if clientCRC32 == "" {
+		clientCRC32 = query.Get("x-amz-checksum-crc32")
+	}
+
+	if clientCRC32 != "" && clientCRC32 != serverCRC32 {
+		_ = fs.DeleteFile(partID)
+		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "BadDigest",
+			Message:   "The CRC32 checksum you specified did not match the calculated checksum.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	oldFileID, err := h.db.SaveMultipartUploadPart(r.Context(), uploadID, partNumber, etag, sizeBytes, partID)
 	if err != nil {
-		_ = fs.DeleteFile(partFileName)
+		_ = fs.DeleteFile(partID)
 		log.Printf("Database error saving part metadata: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -128,6 +165,10 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 			Resource:  r.URL.Path,
 		})
 		return
+	}
+
+	if oldFileID != nil {
+		_ = fs.DeleteFile(*oldFileID)
 	}
 
 	w.Header().Set("ETag", fmt.Sprintf("\"%s\"", etag))

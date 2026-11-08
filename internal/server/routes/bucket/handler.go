@@ -71,7 +71,7 @@ func (h *Handler) getRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.middleware(h.getObjectHandler)(w, r)
+	h.getObjectMiddleware(h.getObjectHandler)(w, r)
 }
 
 func (h *Handler) putRouter(w http.ResponseWriter, r *http.Request) {
@@ -193,6 +193,108 @@ func (h *Handler) middleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		if bucket.OwnerId != user.Id {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "AccessDenied",
+				Message:   "Access Denied",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+
+		ctx := context.WithValue(r.Context(), "bucket", bucket)
+		ctx = context.WithValue(ctx, "user", user)
+		ctx = context.WithValue(ctx, "apiKey", apiKey)
+		r = r.WithContext(ctx)
+
+		next(w, r)
+	}
+}
+
+func (h *Handler) getObjectMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		reqID, _ := r.Context().Value("requestID").(string)
+
+		var user *database.User
+		var apiKey *database.ApiKey
+
+		authHeader := r.Header.Get("Authorization")
+		querySignature := r.URL.Query().Get("X-Amz-Signature")
+
+		if authHeader == "" && querySignature == "" {
+			if r.URL.Query().Has("X-Amz-Credential") {
+				utils.S3ErrorResponse(w, utils.S3Error{
+					Code:      "AccessDenied",
+					Message:   "Access Denied",
+					RequestId: reqID,
+					Resource:  r.URL.Path,
+				})
+				return
+			}
+		} else {
+			var authErr *database.AuthError
+			if len(authHeader) > 0 {
+				user, apiKey, authErr = h.db.ValidateHeaderAuth(r.Context(), r)
+			} else {
+				user, apiKey, authErr = h.db.ValidatePresignedUrl(r.Context(), r)
+			}
+
+			if authErr != nil {
+				utils.S3ErrorResponse(w, utils.S3Error{
+					Code:      authErr.Code,
+					Message:   authErr.Message,
+					RequestId: reqID,
+					Resource:  r.URL.Path,
+				})
+				return
+			}
+
+			if user == nil || apiKey == nil {
+				utils.S3ErrorResponse(w, utils.S3Error{
+					Code:      "AccessDenied",
+					Message:   "Access Denied",
+					RequestId: reqID,
+					Resource:  r.URL.Path,
+				})
+				return
+			}
+		}
+
+		// Get Bucket
+		bucketName := r.PathValue("bucket")
+		if len(bucketName) < 3 || len(bucketName) > 63 {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "InvalidBucketName",
+				Message:   "The specified bucket is not valid.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+
+		bucket, err := h.db.GetBucketByName(r.Context(), bucketName)
+		if err != nil {
+			log.Printf("Database error: %v", err)
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "InternalError",
+				Message:   "An internal error occurred. Try again.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+
+		if bucket == nil {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "NoSuchBucket",
+				Message:   "The specified bucket does not exist",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+
+		if user != nil && bucket.OwnerId != user.Id {
 			utils.S3ErrorResponse(w, utils.S3Error{
 				Code:      "AccessDenied",
 				Message:   "Access Denied",

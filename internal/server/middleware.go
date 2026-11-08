@@ -17,8 +17,11 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		// Set CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Authorization, Content-Type, X-Amz-Date, X-Amz-Content-Sha256, x-amz-meta-unique-id")
-		w.Header().Set("Access-Control-Expose-Headers", "ETag, x-amz-request-id")
+		w.Header().Set("Access-Control-Allow-Headers",
+			"Accept, Authorization, Content-Type, X-Amz-Date, X-Amz-Content-Sha256, "+
+				"X-Amz-Checksum-Crc32, X-Amz-Checksum-Algorithm, x-amz-meta-unique-id",
+		)
+		w.Header().Set("Access-Control-Expose-Headers", "ETag, x-amz-request-id, X-Amz-Checksum-Crc32")
 		w.Header().Set("Access-Control-Allow-Credentials", "false")
 
 		// Handle preflight OPTIONS requests

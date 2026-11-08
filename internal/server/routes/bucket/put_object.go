@@ -1,6 +1,7 @@
 package bucket
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
@@ -44,10 +45,12 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	customMetadata := make(map[string]string)
 	customMetadataSize := 0
+	const metaPrefix = "X-Amz-Meta-"
 	for key, val := range r.Header {
-		if strings.HasPrefix(key, "X-Amz-Meta-") && len(val) > 0 {
-			customMetadata[key] = val[0]
-			customMetadataSize += len(key) + len(val[0])
+		if strings.HasPrefix(key, metaPrefix) && len(val) > 0 {
+			k := strings.ToLower(key[len(metaPrefix):])
+			customMetadata[k] = val[0]
+			customMetadataSize += len(k) + len(val[0])
 		}
 	}
 
@@ -55,6 +58,26 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "MetadataTooLarge",
 			Message:   "Your user metadata exceeds the maximum allowed size (2 KB)",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	isPublic := false
+	acl := r.Header.Get("X-Amz-Acl")
+	if acl == "" {
+		acl = query.Get("x-amz-acl")
+	}
+
+	switch acl {
+	case "", "private":
+	case "public-read":
+		isPublic = true
+	default:
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "NotImplemented",
+			Message:   "Only the private and public-read ACLs are supported",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -72,9 +95,6 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if this is an overwrite so we can clean up the old file later
-	existingObj, _ := h.db.GetObjectByKey(r.Context(), bucket.Id, key)
-
 	objectID := ksuid.New().String()
 	fw, err := fs.WriteFile(objectID)
 	if err != nil {
@@ -86,16 +106,15 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	defer fw.Close()
+
+	defer fw.Abort()
 
 	hash := md5.New()
 	CRC32Hash := crc32.NewIEEE()
-	multiWriter := io.MultiWriter(fw.Writer, hash, CRC32Hash)
+	multiWriter := io.MultiWriter(fw, hash, CRC32Hash)
 
 	sizeBytes, err := io.Copy(multiWriter, r.Body)
 	if err != nil {
-		fw.Close()
-		_ = fs.DeleteFile(objectID)
 		log.Printf("Error writing file: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
@@ -106,24 +125,72 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fw.Close()
-	etag := hex.EncodeToString(hash.Sum(nil))
-
-	serverCRC32 := base64.StdEncoding.EncodeToString(CRC32Hash.Sum(nil))
-	clientCRC32 := query.Get("x-amz-checksum-crc32")
-	if clientCRC32 != "" && clientCRC32 != serverCRC32 {
-		_ = fs.DeleteFile(objectID)
-		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
+	if err := fw.Close(); err != nil {
+		log.Printf("Error closing file: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "InvalidDigest",
-			Message:   "The Content-MD5 or checksum value that you specified is not valid.",
+			Code:      "InternalError",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
 		return
 	}
 
-	_, err = h.db.CreateObject(r.Context(), bucket.Id, objectID, key, sizeBytes, contentType, etag, contentDisposition, contentLanguage, customMetadata)
+	etag := hex.EncodeToString(hash.Sum(nil))
+	if md5Header := r.Header.Get("Content-MD5"); md5Header != "" {
+		clientMD5, err := base64.StdEncoding.DecodeString(md5Header)
+		if err != nil || len(clientMD5) != md5.Size {
+			_ = fs.DeleteFile(objectID)
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "InvalidDigest",
+				Message:   "The Content-MD5 or checksum value that you specified is not valid.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+		if !bytes.Equal(clientMD5, hash.Sum(nil)) {
+			_ = fs.DeleteFile(objectID)
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "BadDigest",
+				Message:   "The Content-MD5 you specified did not match what we received.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+	}
+
+	serverCRC32 := base64.StdEncoding.EncodeToString(CRC32Hash.Sum(nil))
+	clientCRC32 := r.Header.Get("X-Amz-Checksum-Crc32")
+	if clientCRC32 == "" {
+		clientCRC32 = query.Get("x-amz-checksum-crc32")
+	}
+
+	if clientCRC32 != "" && clientCRC32 != serverCRC32 {
+		_ = fs.DeleteFile(objectID)
+		log.Printf("CRC32 mismatch: expected %s, got %s", clientCRC32, serverCRC32)
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "BadDigest",
+			Message:   "The CRC32 checksum you specified did not match the calculated checksum.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
+	oldFiles, err := h.db.ReplaceObject(r.Context(), database.Object{
+		ObjectId:           objectID,
+		BucketId:           bucket.Id,
+		ObjectKey:          key,
+		SizeBytes:          sizeBytes,
+		ContentType:        contentType,
+		ContentDisposition: contentDisposition,
+		ContentLanguage:    contentLanguage,
+		CustomMetadata:     customMetadata,
+		ETag:               etag,
+		IsPublic:           isPublic,
+	}, []database.ObjectSegment{{FileID: objectID, Size: sizeBytes, Start: 0}})
 	if err != nil {
 		_ = fs.DeleteFile(objectID)
 		log.Printf("Database error creating object: %v\n", err)
@@ -136,12 +203,8 @@ func (h *Handler) putObjectHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Delete the old object with the same key
-	if existingObj != nil {
-		err := fs.DeleteFile(existingObj.ObjectId)
-		if err != nil {
-			log.Printf("Failed to delete overwritten file %s: %v\n", existingObj.ObjectId, err)
-		}
+	if err := fs.DeleteFiles(oldFiles); err != nil {
+		log.Printf("cleanup after overwrite: %v", err)
 	}
 
 	w.Header().Set("ETag", fmt.Sprintf("\"%s\"", etag))

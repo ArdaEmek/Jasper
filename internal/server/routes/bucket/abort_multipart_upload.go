@@ -1,12 +1,14 @@
 package bucket
 
 import (
-	"fmt"
+	"errors"
 	"log"
 	"net/http"
 	"s3/internal/database"
 	"s3/internal/filesystem"
 	"s3/internal/server/utils"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func (h *Handler) abortMultipartUploadHandler(w http.ResponseWriter, r *http.Request) {
@@ -30,10 +32,20 @@ func (h *Handler) abortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 
 	// 1. Verify the upload exists and belongs to this bucket/key/user
 	mu, err := h.db.GetMultipartUpload(r.Context(), uploadID)
-	if err != nil || mu == nil {
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "NoSuchUpload",
+				Message:   "The specified multipart upload does not exist. The upload ID might not be valid, or the multipart upload might have been aborted or completed.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+			return
+		}
+		log.Printf("get multipart upload %s: %v", uploadID, err)
 		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "NoSuchUpload",
-			Message:   "The specified multipart upload does not exist. The upload ID might not be valid, or the multipart upload might have been aborted or completed.",
+			Code:      "InternalError",
+			Message:   "An internal error occurred. Try again.",
 			RequestId: reqID,
 			Resource:  r.URL.Path,
 		})
@@ -50,20 +62,9 @@ func (h *Handler) abortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Fetch all parts
-	dbParts, err := h.db.ListMultipartUploadParts(r.Context(), uploadID, 0, 10000)
+	files, err := h.db.DeleteMultipartUpload(r.Context(), uploadID)
 	if err != nil {
-		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "InternalError",
-			Message:   "An internal error occurred. Try again.",
-			RequestId: reqID,
-			Resource:  r.URL.Path,
-		})
-		return
-	}
-
-	err = h.db.DeleteMultipartUpload(r.Context(), uploadID)
-	if err != nil {
+		log.Printf("delete multipart upload %s: %v", uploadID, err)
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "InternalError",
 			Message:   "An internal error occurred. Try again.",
@@ -75,11 +76,8 @@ func (h *Handler) abortMultipartUploadHandler(w http.ResponseWriter, r *http.Req
 
 	// Deleting parts
 	fs := filesystem.GetInstance()
-	for _, part := range dbParts {
-		partFileName := fmt.Sprintf("%s_%d", uploadID, part.PartNumber)
-		if err := fs.DeleteFile(partFileName); err != nil {
-			log.Printf("Warning: failed to delete part file %s on abort: %v", partFileName, err)
-		}
+	if err := fs.DeleteFiles(files); err != nil {
+		log.Printf("cleanup of aborted upload %s: %v", uploadID, err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
