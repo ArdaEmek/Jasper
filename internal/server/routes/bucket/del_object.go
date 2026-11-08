@@ -116,7 +116,7 @@ func (h *Handler) delObjectHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err = h.db.DeleteObject(r.Context(), bucket.Id, key)
+	files, err := h.db.DeleteObject(r.Context(), bucket.Id, key)
 	if err != nil {
 		log.Printf("Database error deleting object metadata: %v\n", err)
 		utils.S3ErrorResponse(w, utils.S3Error{
@@ -130,7 +130,7 @@ func (h *Handler) delObjectHandler(w http.ResponseWriter, r *http.Request) {
 
 	fs := filesystem.GetInstance()
 	if fs != nil {
-		err := fs.DeleteFile(existingObj.ObjectId)
+		err := fs.DeleteFiles(files)
 		if err != nil {
 			log.Printf("Failed to physically delete file %s: %v\n", existingObj.ObjectId, err)
 		}

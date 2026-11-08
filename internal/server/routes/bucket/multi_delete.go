@@ -52,7 +52,8 @@ func (h *Handler) multiDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var deleteReq utils.DeleteObjectsRequest
-	decoder := xml.NewDecoder(r.Body)
+	body := http.MaxBytesReader(w, r.Body, 2<<20) // 2MB
+	decoder := xml.NewDecoder(body)
 	if err := decoder.Decode(&deleteReq); err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
 			Code:      "MalformedXML",
@@ -141,7 +142,7 @@ func (h *Handler) multiDeleteHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		err = h.db.DeleteObject(r.Context(), bucket.Id, obj.Key)
+		files, err := h.db.DeleteObject(r.Context(), bucket.Id, obj.Key)
 		if err != nil {
 			log.Printf("Database error deleting object metadata: %v\n", err)
 			errors = append(errors, utils.DeleteError{
@@ -152,8 +153,8 @@ func (h *Handler) multiDeleteHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if err := fs.DeleteFile(existingObj.ObjectId); err != nil {
-			log.Printf("Failed to physically delete file %s: %v\n", existingObj.ObjectId, err)
+		if err := fs.DeleteFiles(files); err != nil {
+			log.Printf("cleanup of deleted object files: %v", err)
 		}
 
 		if !deleteReq.Quiet {
