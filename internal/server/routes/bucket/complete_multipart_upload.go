@@ -189,6 +189,7 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 		ContentLanguage:    contentLang,
 		CustomMetadata:     mu.CustomMetadata,
 		ETag:               finalEtag,
+		IsPublic:           mu.IsPublic,
 	}, segs)
 
 	switch {
