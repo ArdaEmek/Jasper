@@ -59,12 +59,11 @@ func NewServer() (*http.Server, *http3.Server, error) {
 
 	// HTTP1 Server
 	httpServer := &http.Server{
-		Addr:         fmt.Sprintf(":%d", NewServer.port),
-		Handler:      NewServer.RegisterRoutes(),
-		IdleTimeout:  time.Minute,
-		ReadTimeout:  10 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		TLSConfig:    tlsConfig,
+		Addr:              fmt.Sprintf(":%d", NewServer.port),
+		Handler:           NewServer.RegisterRoutes(),
+		IdleTimeout:       time.Minute,
+		ReadHeaderTimeout: 10 * time.Second,
+		TLSConfig:         tlsConfig,
 	}
 
 	var http3Server *http3.Server
