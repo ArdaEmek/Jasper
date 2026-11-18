@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"s3/internal/filesystem"
 	"s3/internal/server/utils"
 	"strconv"
+	"time"
 
 	"github.com/klauspost/crc32"
 	"github.com/segmentio/ksuid"
@@ -82,21 +84,49 @@ func (h *Handler) uploadPartHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+
+	const maxBodySize = 5 << 30 // 5GB
+	if r.ContentLength > maxBodySize {
+		utils.S3ErrorResponse(w, utils.S3Error{
+			Code:      "EntityTooLarge",
+			Message:   "Your proposed upload exceeds the maximum allowed size.",
+			RequestId: reqID,
+			Resource:  r.URL.Path,
+		})
+		return
+	}
+
 	defer fw.Abort()
 
 	hash := md5.New()
 	CRC32Hash := crc32.NewIEEE()
 	multiWriter := io.MultiWriter(fw, hash, CRC32Hash)
 
-	sizeBytes, err := io.Copy(multiWriter, r.Body)
+	reader := http.MaxBytesReader(w, r.Body, maxBodySize)
+	body := utils.NewIdleReader(w, reader, 30*time.Second)
+	sizeBytes, err := io.Copy(multiWriter, body)
 	if err != nil {
-		log.Printf("Error writing file: %v\n", err)
-		utils.S3ErrorResponse(w, utils.S3Error{
-			Code:      "InternalError",
-			Message:   "An internal error occurred. Try again.",
-			RequestId: reqID,
-			Resource:  r.URL.Path,
-		})
+		var maxBytesError *http.MaxBytesError
+
+		switch {
+		case errors.As(err, &maxBytesError):
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "EntityTooLarge",
+				Message:   "Your proposed upload exceeds the maximum allowed size.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+		case utils.ClientGone(r, err):
+			return
+		default:
+			log.Printf("Error writing file: %v\n", err)
+			utils.S3ErrorResponse(w, utils.S3Error{
+				Code:      "InternalError",
+				Message:   "An internal error occurred. Try again.",
+				RequestId: reqID,
+				Resource:  r.URL.Path,
+			})
+		}
 		return
 	}
 

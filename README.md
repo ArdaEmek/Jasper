@@ -9,6 +9,8 @@ A lightweight, S3-compatible cloud storage server written in Go. Self-host your 
 - Bucket & object management
 - **Public and private objects** — objects are private by default; `x-amz-acl: public-read` makes an object readable without credentials
 - **Instant multipart completion** — parts are kept as separate files and served as one logical object (no data copying)
+- **Bounded uploads** — `PutObject` and `UploadPart` accept bodies up to 5 GiB
+- **Timeout protection** — request and streaming timeouts are enforced where supported
 - PostgreSQL-backed metadata storage
 - TLS 1.3 enforced
 - Token-based admin authentication
@@ -219,6 +221,11 @@ Range: bytes=-500       # Last 500 bytes
 
 The server responds with `206 Partial Content` and the appropriate `Content-Range` header. A single range is supported; malformed or multi-range headers are ignored and the full object is returned.
 
+#### Request Limits and Timeouts
+
+- `PutObject` and `UploadPart` reject request bodies larger than **5 GiB** with `EntityTooLarge`.
+- `CompleteMultipartUpload` and multi-object delete requests accept XML bodies up to **2 MiB**.
+
 ## Public Objects
 
 Objects are **private by default**. To make an object publicly readable, upload it with the standard `x-amz-acl: public-read` header (or `ACL: "public-read"` in an SDK). `private` is also accepted; any other ACL value returns `NotImplemented`.
@@ -239,34 +246,34 @@ How public access behaves:
 
 ## Supported S3 Operations
 
-| Operation | Status | Notes                                  |
-|-----------|--------|----------------------------------------|
-| **Bucket Operations** | |                                        |
-| CreateBucket | ✅ | Supported                              |
-| DeleteBucket | ✅ | Supported                              |
-| ListBuckets | ✅ | Supported                              |
-| GetBucketLocation | ❌ | Multi-location is not supported        |
-| **Object Operations** | |                                        |
+| Operation | Status | Notes                                      |
+|-----------|--------|--------------------------------------------|
+| **Bucket Operations** | |                                            |
+| CreateBucket | ✅ | Supported                                  |
+| DeleteBucket | ✅ | Supported                                  |
+| ListBuckets | ✅ | Supported                                  |
+| GetBucketLocation | ❌ | Multi-location is not supported            |
+| **Object Operations** | |                                            |
 | PutObject | ✅ | Supported (`private` and `public-read` ACLs) |
-| GetObject | ✅ | Supported (anonymous for public objects) |
-| HeadObject | ✅ | Supported (anonymous for public objects) |
-| DeleteObject | ✅ | Supported (Multiple objects supported) |
-| CopyObject | ❌ | Not yet implemented                    |
-| **Multipart Upload** | |                                        |
+| GetObject | ✅ | Supported (anonymous for public objects)   |
+| HeadObject | ✅ | Supported (anonymous for public objects)   |
+| DeleteObject | ✅ | Supported (Multiple objects supported)     |
+| CopyObject | ❌ | Not yet implemented                        |
+| **Multipart Upload** | |                                            |
 | CreateMultipartUpload | ✅ | Supported (`private` and `public-read` ACLs) |
-| UploadPart | ✅ | Supported                              |
-| CompleteMultipartUpload | ✅ | Supported (no data copy; parts are stored as segments) |
-| ListParts | ✅ | Supported                              |
-| AbortMultipartUpload | ✅ | Supported                              |
-| **Object Listing** | |                                        |
-| ListObjects | ✅ | Supported                              |
-| ListObjectsV2 | ✅ | Supported                              |
-| **ACL & Permissions** | |                                        |
-| PutObjectAcl | ❌ | Not yet implemented                    |
-| GetObjectAcl | ❌ | Not yet implemented                    |
-| **Tagging** | |                                        |
-| PutObjectTagging | ❌ | Not yet implemented                    |
-| GetObjectTagging | ❌ | Not yet implemented                    |
+| UploadPart | ✅ | Supported                                  |
+| CompleteMultipartUpload | ✅ | Supported (Virtual-stitching)              |
+| ListParts | ✅ | Supported                                  |
+| AbortMultipartUpload | ✅ | Supported                                  |
+| **Object Listing** | |                                            |
+| ListObjects | ✅ | Supported                                  |
+| ListObjectsV2 | ✅ | Supported                                  |
+| **ACL & Permissions** | |                                            |
+| PutObjectAcl | ❌ | Not yet implemented                        |
+| GetObjectAcl | ❌ | Not yet implemented                        |
+| **Tagging** | |                                            |
+| PutObjectTagging | ❌ | Not yet implemented                        |
+| GetObjectTagging | ❌ | Not yet implemented                        |
 
 ## Usage Examples
 

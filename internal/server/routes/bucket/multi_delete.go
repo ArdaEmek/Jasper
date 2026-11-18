@@ -9,6 +9,7 @@ import (
 	"s3/internal/server/utils"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (h *Handler) multiDeleteHandler(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +53,8 @@ func (h *Handler) multiDeleteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var deleteReq utils.DeleteObjectsRequest
-	body := http.MaxBytesReader(w, r.Body, 2<<20) // 2MB
+	reader := http.MaxBytesReader(w, r.Body, 2<<20) // 2MB
+	body := utils.NewIdleReader(w, reader, 30*time.Second)
 	decoder := xml.NewDecoder(body)
 	if err := decoder.Decode(&deleteReq); err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
