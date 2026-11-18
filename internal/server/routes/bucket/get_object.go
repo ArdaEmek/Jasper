@@ -8,6 +8,7 @@ import (
 	"s3/internal/filesystem"
 	"s3/internal/server/utils"
 	"strconv"
+	"time"
 )
 
 func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
@@ -172,7 +173,12 @@ func (h *Handler) getObjectHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
 	w.WriteHeader(status)
 
-	if err := sr.WriteRange(w, start, length); err != nil {
+	rc := http.NewResponseController(w)
+	sr.BeforeChunk = func() {
+		_ = rc.SetWriteDeadline(time.Now().Add(3 * time.Minute))
+	}
+
+	if err := sr.WriteRange(w, start, length); err != nil && !utils.ClientGone(r, err) {
 		log.Printf("Error streaming %s to client: %v", objectData.ObjectId, err)
 	}
 }
