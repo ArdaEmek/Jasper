@@ -11,6 +11,7 @@ import (
 	"s3/internal/database"
 	"s3/internal/filesystem"
 	"s3/internal/server/utils"
+	"time"
 
 	"github.com/segmentio/ksuid"
 )
@@ -26,7 +27,8 @@ func (h *Handler) completeMultipartUploadHandler(w http.ResponseWriter, r *http.
 
 	// Parse XML Payload
 	var completeReq utils.CompleteMultipartUploadRequest
-	body := http.MaxBytesReader(w, r.Body, 2<<20) // 2MB
+	reader := http.MaxBytesReader(w, r.Body, 2<<20) // 2MB
+	body := utils.NewIdleReader(w, reader, 30*time.Second)
 	decoder := xml.NewDecoder(body)
 	if err := decoder.Decode(&completeReq); err != nil {
 		utils.S3ErrorResponse(w, utils.S3Error{
