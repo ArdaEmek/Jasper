@@ -19,13 +19,13 @@ type Segment struct {
 	Start  int64 // cumulative offset of this segment within the object
 }
 
-// SegmentedReader presents an ordered list of files as one logical file.
-// It holds no open descriptors: each segment is opened only while it is being
-// copied, so it is cheap to create and safe for concurrent use.
+// SegmentedReader reads virtually stitched files as if it was a single file.
 type SegmentedReader struct {
 	fm   *fileManager
 	segs []Segment
 	size int64
+
+	BeforeChunk func()
 }
 
 func (fm *fileManager) NewSegmentedReader(segs []Segment) *SegmentedReader {
@@ -70,23 +70,33 @@ func (sr *SegmentedReader) WriteRange(w io.Writer, start, length int64) error {
 	return nil
 }
 
+const chunkSize = 16 << 20 // 16MB chunk limit
+
 func (sr *SegmentedReader) copySegment(w io.Writer, seg Segment, off, n int64) error {
-	f, err := sr.fm.GetFile(seg.FileID)
+	file, err := sr.fm.GetFile(seg.FileID)
 	if err != nil {
 		return fmt.Errorf("open segment %s: %w", seg.FileID, err)
 	}
-	defer f.Close()
+	defer file.Close()
 
 	if off > 0 {
-		if _, err := f.Seek(off, io.SeekStart); err != nil {
+		if _, err := file.Seek(off, io.SeekStart); err != nil {
 			return fmt.Errorf("seek segment %s: %w", seg.FileID, err)
 		}
 	}
-	if _, err := io.CopyN(w, f, n); err != nil {
-		if errors.Is(err, io.EOF) {
-			return fmt.Errorf("%w: %s", ErrSegmentTruncated, seg.FileID)
+	for n > 0 {
+		if sr.BeforeChunk != nil {
+			sr.BeforeChunk()
 		}
-		return err
+
+		piece := min(n, chunkSize)
+		if _, err := io.CopyN(w, file, piece); err != nil {
+			if errors.Is(err, io.EOF) {
+				return fmt.Errorf("%w: %s", ErrSegmentTruncated, seg.FileID)
+			}
+			return err
+		}
+		n -= piece
 	}
 	return nil
 }
